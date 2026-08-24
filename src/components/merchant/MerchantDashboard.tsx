@@ -10,8 +10,34 @@ interface MerchantDashboardProps {
   lang?: Language;
 }
 
+// Map order statuses to consistent badge styles for the merchant view
+const getStatusBadgeClasses = (status: string): string => {
+  switch (status) {
+    case 'pending':
+      return 'bg-amber-100 text-amber-700';
+    case 'preparing':
+      return 'bg-blue-100 text-blue-700';
+    case 'driver_claimed':
+      return 'bg-purple-100 text-purple-700';
+    case 'ready':
+    case 'ready_for_payment':
+    case 'ready_for_delivery':
+      return 'bg-emerald-100 text-emerald-700';
+    case 'on_the_way':
+      return 'bg-sky-100 text-sky-700';
+    case 'delivered_unpaid':
+      return 'bg-orange-100 text-orange-700';
+    case 'paid':
+    case 'completed':
+    case 'TrackDone':
+      return 'bg-slate-100 text-slate-500';
+    default:
+      return 'bg-slate-100 text-slate-600';
+  }
+};
+
 export const MerchantDashboard: React.FC<MerchantDashboardProps> = (props) => {
-  // استقبال حالة اللغة الموحدة من الراوتر الأب أو البروبس
+  // Inherit unified language state from parent router or props
   const outletContext = useOutletContext<{ lang: Language }>() || {};
   const lang = props.lang || outletContext.lang || 'ar';
   const t = translations[lang].merchantDashboard;
@@ -20,7 +46,10 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = (props) => {
   const orders = context?.orders || [];
   const updateOrderStatus = context?.updateOrderStatus || (async () => {});
 
-  const activeOrders = orders.filter((o: any) => o.status !== 'paid' && o.status !== 'completed');
+  // Exclude orders that are no longer under merchant control:
+  // paid, completed, delivered_unpaid, TrackDone, and on_the_way
+  const terminalStatuses = ['paid', 'completed', 'delivered_unpaid', 'TrackDone', 'on_the_way'];
+  const activeOrders = orders.filter((o: any) => !terminalStatuses.includes(o.status));
 
   return (
     <div className="p-6 bg-slate-50 min-h-screen" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
@@ -51,9 +80,7 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = (props) => {
                       {t.dailyOrderNumber.replace('{number}', order.orderNumber || t.unspecifiedNumber)}
                     </p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
-                    order.status === 'ready' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
-                  }`}>
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${getStatusBadgeClasses(order.status)}`}>
                     {order.status}
                   </span>
                 </div>
@@ -69,7 +96,7 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = (props) => {
                   })}
                 </ul>
 
-                {order.status === 'ready' && (
+                {(order.status === 'ready' || order.status === 'ready_for_payment') && (
                   <button 
                     onClick={() => updateOrderStatus(order.id, 'paid')}
                     className="w-full bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700 transition"

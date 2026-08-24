@@ -5,7 +5,7 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, Globe, Phone } from 'lucide-react';
 
-// دالة لتحديد لغة المتصفح الافتراضية
+// Determine the browser's default language
 const getBrowserLanguage = (): 'ar' | 'fr' | 'en' => {
   const browserLang = navigator.language || (navigator as any).userLanguage || 'en';
   if (browserLang.startsWith('ar')) return 'ar';
@@ -13,7 +13,6 @@ const getBrowserLanguage = (): 'ar' | 'fr' | 'en' => {
   return 'en';
 };
 
-// قاموس الترجمات المحدث ليدعم خيار الهاتف
 const loginTranslations = {
   ar: {
     title: 'تسجيل الدخول',
@@ -57,22 +56,19 @@ const loginTranslations = {
 };
 
 export const Login: React.FC = () => {
-  // الحالة الخاصة باللغة مع دعم الحفظ واستشعار المتصفح
   const [lang, setLang] = useState<'ar' | 'fr' | 'en'>(() => {
     return (localStorage.getItem('preferred_lang') as 'ar' | 'fr' | 'en') || getBrowserLanguage();
   });
 
   const t = loginTranslations[lang];
 
-  // حالة لتحديد طريقة الدخول (هاتف أو إيميل)
   const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
-  const [inputValue, setInputValue] = useState(''); // سيحمل رقم الهاتف أو البريد المدخل
+  const [inputValue, setInputValue] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // دالة تغيير اللغة وحفظها
   const handleLanguageChange = (newLang: 'ar' | 'fr' | 'en') => {
     setLang(newLang);
     localStorage.setItem('preferred_lang', newLang);
@@ -86,16 +82,16 @@ export const Login: React.FC = () => {
     try {
       let authEmail = inputValue.trim();
 
-      // إذا كانت طريقة الدخول هي رقم الهاتف، نقوم بتحويله إلى الإيميل الوهمي المبرمج خلف الكواليس
       if (loginMethod === 'phone') {
         const cleanPhone = authEmail.replace(/\s+/g, '').replace(/[^0-9]/g, '');
         authEmail = `${cleanPhone}@restaurant-staff.local`;
       }
 
-      // 1. محاولة تسجيل الدخول عبر Firebase Auth باستخدام الإيميل (الحقيقي أو الوهمي المبني على الهاتف)
-      await signInWithEmailAndPassword(auth, authEmail, password);
+      // Authenticate and capture the Firebase UID for stable cross-session identity
+      const userCredential = await signInWithEmailAndPassword(auth, authEmail, password);
+      const firebaseUid = userCredential.user.uid;
+      localStorage.setItem('userId', firebaseUid);
       
-      // 2. التحقق مما إذا كان البريد هو بريدك الخاص بالمدير العام (Super Admin)
       if (authEmail === 'abdeldjalilkhalfa2@gmail.com') {
         localStorage.setItem('userRole', 'SuperAdmin');
         localStorage.setItem('userName', 'Abdeljalil Khalfa');
@@ -103,7 +99,6 @@ export const Login: React.FC = () => {
         return;
       }
       
-      // 3. البحث عن بيانات الموظف في Firestore إما بالبريد الإلكتروني الحقيقي أو برقم الهاتف
       let staffQuery;
       if (loginMethod === 'phone') {
         staffQuery = query(collection(db, 'staff'), where('phone', '==', inputValue.trim()));
@@ -113,7 +108,6 @@ export const Login: React.FC = () => {
       
       let querySnapshot = await getDocs(staffQuery);
 
-      // احتياطاً: إن لم يتم العثور بالهاتف المباشر، نبحث عبر الإيميل المرتبط
       if (querySnapshot.empty && loginMethod === 'phone') {
         const fallbackQuery = query(collection(db, 'staff'), where('email', '==', authEmail));
         querySnapshot = await getDocs(fallbackQuery);
@@ -126,13 +120,11 @@ export const Login: React.FC = () => {
         localStorage.setItem('userRole', staffData.role);
         localStorage.setItem('userName', staffData.name);
 
-        // التوجيه الذكي حسب الدور
         if (staffData.role === 'Admin') navigate('/merchant/overview');
         else if (staffData.role === 'Cashier') navigate('/cashier');
         else if (staffData.role === 'Kitchen') navigate('/kitchen');
         else navigate('/delivery');
       } else {
-        // التحقق كـ مطعم مسجل مباشرة (Restaurants Collection)
         const restaurantQuery = query(collection(db, 'restaurants'), where('email', '==', authEmail));
         const restSnapshot = await getDocs(restaurantQuery);
         
@@ -156,7 +148,6 @@ export const Login: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <form onSubmit={handleLogin} className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm space-y-5 relative">
-        {/* زر تبديل اللغة السريع */}
         <div className="flex justify-end items-center gap-1">
           <Globe size={16} className="text-slate-400" />
           <select 
@@ -175,7 +166,6 @@ export const Login: React.FC = () => {
           <p className="text-slate-500 text-sm mt-1">{t.subtitle}</p>
         </div>
 
-        {/* أزرار التبديل بين طريقة الدخول بالهاتف أو البريد */}
         <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-xl">
           <button
             type="button"
@@ -189,7 +179,7 @@ export const Login: React.FC = () => {
           <button
             type="button"
             onClick={() => { setLoginMethod('email'); setInputValue(''); }}
-              className={`py-2 text-xs font-bold rounded-lg transition ${
+            className={`py-2 text-xs font-bold rounded-lg transition ${
               loginMethod === 'email' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
@@ -200,7 +190,6 @@ export const Login: React.FC = () => {
         {error && <p className="text-red-500 text-xs text-center bg-red-50 p-2.5 rounded-xl">{error}</p>}
 
         <div className="space-y-4">
-          {/* حقل الإدخال المتغير (هاتف أو إيميل) لمنع أخطاء المتصفح */}
           <div className="relative">
             {loginMethod === 'phone' ? (
               <Phone className={`absolute ${lang === 'ar' ? 'left-3' : 'right-3'} top-3.5 text-slate-400`} size={18} />

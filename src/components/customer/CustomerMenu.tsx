@@ -13,16 +13,14 @@ import { MenuOrOrderManager } from './MenuOrderManager';
 import { MyReceipts } from '../customer/MyReceipts';
 import { customerTranslations } from '../../utils/translations/customerTranslations';
 
-// 👈 استيراد Firestore والجلب الحي للتخفيضات والثيم
 import { db } from '../../firebase';
-import { doc, updateDoc, onSnapshot, getDoc, query, where, collection, getDocs } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc, query, where, collection, getDocs } from 'firebase/firestore';
 import { Tag } from 'lucide-react';
 
 interface ThemeConfig {
   logoUrl: string;
   primaryColor: string;
   secondaryColor: string;
-  // 🎯 إضافة خيارات المنيو والـ Banner إلى الأنواع
   menuBgType: 'color' | 'image';
   menuBgColor: string;
   menuBgImage: string;
@@ -45,7 +43,7 @@ const DEFAULT_THEME: ThemeConfig = {
 
 export const CustomerMenu: React.FC = () => {
   const { menuItems, themeColor, currentTable, setTable } = useMenu();
-  const { orders, placeOrder } = useContext(OrderContext);
+  const { orders, placeOrder, appendToOrder } = useContext(OrderContext);
   const { cart, notes, handleAddToCart, updateNote, cartCount, clearCart } = useCart();
   const [searchParams] = useSearchParams();
   
@@ -56,10 +54,10 @@ export const CustomerMenu: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState('all');
   const [showReceipts, setShowReceipts] = useState(false);
 
-  // 🎨 حالة الثيم
+  // Theme state
   const [theme, setTheme] = useState<ThemeConfig>(DEFAULT_THEME);
 
-  // 🎯 نسبة الخصم المفعّلة للزبون الحالي
+  // Active discount percentage for the current customer
   const [activeDiscount, setActiveDiscount] = useState<number>(0);
 
   const [lang, setLangState] = useState<'ar' | 'en' | 'fr'>(() => {
@@ -78,18 +76,17 @@ export const CustomerMenu: React.FC = () => {
            key;
   };
 
-  // دالة جلب معرف المطعم الحالي لضمان العزل
+  // Resolve the current restaurant ID to enforce strict data isolation
   const getRestaurantId = () => {
     return searchParams.get('restaurantId') || localStorage.getItem('restaurantId') || 'default_restaurant';
   };
 
-// 🎨 جلب إعدادات الثيم والهوية البصرية من Firestore مع دعم العزل التام للمطعم
+  // Fetch theme and visual identity settings from Firestore with full restaurant isolation
   useEffect(() => {
     const fetchTheme = async () => {
       try {
-        const currentRestaurantId = getRestaurantId(); // 👈 استخراج معرف المطعم الحالي لضمان العزل
+        const currentRestaurantId = getRestaurantId();
         
-        // 👈 جلب الثيم من مسار المطعم المعزول (حسب هيكلة قواعد البيانات لديك)
         const themeDoc = await getDoc(doc(db, 'restaurants', currentRestaurantId, 'settings', 'theme'));
         
         if (themeDoc.exists()) {
@@ -98,7 +95,6 @@ export const CustomerMenu: React.FC = () => {
             logoUrl: data.logoUrl || DEFAULT_THEME.logoUrl,
             primaryColor: data.primaryColor || DEFAULT_THEME.primaryColor,
             secondaryColor: data.secondaryColor || DEFAULT_THEME.secondaryColor,
-            // 🎯 جلب خصائص المنيو والغلاف الخاصة بهذا المطعم فقط
             menuBgType: data.menuBgType || DEFAULT_THEME.menuBgType,
             menuBgColor: data.menuBgColor || DEFAULT_THEME.menuBgColor,
             menuBgImage: data.menuBgImage || DEFAULT_THEME.menuBgImage,
@@ -114,7 +110,7 @@ export const CustomerMenu: React.FC = () => {
     fetchTheme();
   }, [searchParams]);
 
-  // 1️⃣ استخراج أو إنشاء معرف متصفح الزبون
+  // Extract or create a unique browser ID for the customer
   const getCustomerId = () => {
     let customerBrowserId = localStorage.getItem('menu_customer_id');
     if (!customerBrowserId) {
@@ -124,7 +120,7 @@ export const CustomerMenu: React.FC = () => {
     return customerBrowserId;
   };
 
-  // 2️⃣ الاستماع الحي لقيمة التخفيض المفعلة للزبون من Firestore
+  // Live listener for the customer's active discount value from Firestore
   useEffect(() => {
     const customerId = getCustomerId();
     const unsub = onSnapshot(doc(db, 'customers', customerId), (docSnap) => {
@@ -176,7 +172,7 @@ export const CustomerMenu: React.FC = () => {
 
   const handleCheckout = async () => {
     if (!cart || Object.keys(cart).length === 0) {
-      console.error("الطلب فارغ!");
+      console.error("Cart is empty!");
       return;
     }
 
@@ -186,23 +182,11 @@ export const CustomerMenu: React.FC = () => {
 
     if (currentOrder && currentOrder.id) {
       try {
-        const appendedItems = formattedItems.map(item => ({
-          ...item,
-          isAppended: true
-        }));
-
-        const updatedItems = [...(currentOrder.items || []), ...appendedItems];
-        const newTotalAmount = Number(currentOrder.totalAmount || currentOrder.totalPrice || 0) + totalAmount;
-        const orderRef = doc(db, "orders", currentOrder.id);
-        await updateDoc(orderRef, {
-          items: updatedItems,
-          totalAmount: newTotalAmount,
-          totalPrice: newTotalAmount
-        });
+        await appendToOrder(currentOrder.id, formattedItems);
         setIsOrderPlaced(true);
         if (clearCart) clearCart();
       } catch (error) {
-        console.error("خطأ أثناء إضافة العناصر للطلب الحالي:", error);
+        console.error("Error appending items to current order:", error);
       }
       return;
     }
@@ -212,60 +196,61 @@ export const CustomerMenu: React.FC = () => {
         await placeOrder(formattedItems, currentTable, null, totalAmount, { 
           customerId: customerBrowserId,
           appliedDiscountPercent: activeDiscount,
-          restaurantId: currentRestaurantId // 👈 عزل الطلب بمعرف المطعم
+          restaurantId: currentRestaurantId
         });
         setIsOrderPlaced(true);
         if (clearCart) clearCart();
       } catch (error) {
-        console.error("خطأ أثناء الإرسال للطاولة:", error);
+        console.error("Error sending table order:", error);
       }
     } else {
       setShowDeliveryForm(true);
     }
   };
- const handleFinalSubmit = async (deliveryInfo: { name: string; address: string; phone: string }) => {
-  try {
-    const customerBrowserId = getCustomerId();
-    const currentRestaurantId = getRestaurantId();
-    const { formattedItems, totalAmount } = prepareOrderPayloadData();
 
-    // 🔍 جلب أول موظف توصيل (Delivery) نشط تابع لهذا المطعم تلقائياً لربطه بالطلب
-    let assignedDriverName = 'غير محدد';
-    let assignedDriverPhone = '';
-
+  const handleFinalSubmit = async (deliveryInfo: { name: string; address: string; phone: string }) => {
     try {
-      const staffQuery = query(
-        collection(db, 'staff'),
-        where('restaurantId', '==', currentRestaurantId),
-        where('role', '==', 'delivery'),
-        where('status', '==', 'active')
-      );
-      const staffSnapshot = await getDocs(staffQuery);
-      if (!staffSnapshot.empty) {
-        const driverData = staffSnapshot.docs[0].data();
-        assignedDriverName = driverData.name || 'غير محدد';
-        assignedDriverPhone = driverData.phone || '';
+      const customerBrowserId = getCustomerId();
+      const currentRestaurantId = getRestaurantId();
+      const { formattedItems, totalAmount } = prepareOrderPayloadData();
+
+      // Fetch the first active delivery staff member for this restaurant to auto-assign
+      let assignedDriverName = 'غير محدد';
+      let assignedDriverPhone = '';
+
+      try {
+        const staffQuery = query(
+          collection(db, 'staff'),
+          where('restaurantId', '==', currentRestaurantId),
+          where('role', '==', 'delivery'),
+          where('status', '==', 'active')
+        );
+        const staffSnapshot = await getDocs(staffQuery);
+        if (!staffSnapshot.empty) {
+          const driverData = staffSnapshot.docs[0].data();
+          assignedDriverName = driverData.name || 'غير محدد';
+          assignedDriverPhone = driverData.phone || '';
+        }
+      } catch (staffErr) {
+        console.warn("Could not auto-fetch driver, leaving default values:", staffErr);
       }
-    } catch (staffErr) {
-      console.warn("تعذر جلب السائق تلقائياً، سيتم ترك القيمة افتراضية:", staffErr);
+
+      // Send the order with real driver data extracted from the staff collection
+      await placeOrder(formattedItems, '0', deliveryInfo, totalAmount, { 
+        customerId: customerBrowserId,
+        appliedDiscountPercent: activeDiscount,
+        restaurantId: currentRestaurantId,
+        driverName: assignedDriverName,
+        driverPhone: assignedDriverPhone
+      });
+
+      setIsOrderPlaced(true);
+      setShowDeliveryForm(false);
+      if (clearCart) clearCart();
+    } catch (error) {
+      console.error("Error sending delivery order:", error);
     }
-
-    // إرسال الطلب مع بيانات السائق الحقيقية المستخرجة من جدول الـ Staff
-    await placeOrder(formattedItems, '0', deliveryInfo, totalAmount, { 
-      customerId: customerBrowserId,
-      appliedDiscountPercent: activeDiscount,
-      restaurantId: currentRestaurantId,
-      driverName: assignedDriverName,
-      driverPhone: assignedDriverPhone
-    });
-
-    setIsOrderPlaced(true);
-    setShowDeliveryForm(false);
-    if (clearCart) clearCart();
-  } catch (error) {
-    console.error("خطأ أثناء إرسال طلب التوصيل:", error);
-  }
-};
+  };
 
   const filteredItems = activeCategory === 'all' 
     ? menuItems 
@@ -285,6 +270,14 @@ export const CustomerMenu: React.FC = () => {
       ) 
     : null;
 
+  // Reset the order-placed flag when the active order finishes or disappears,
+  // allowing the customer to start a fresh order cycle without stale UI state.
+  useEffect(() => {
+    if (!currentOrder && isOrderPlaced) {
+      setIsOrderPlaced(false);
+    }
+  }, [currentOrder, isOrderPlaced]);
+
   if (isChecking) return null;
 
   if (!hasStarted) {
@@ -293,16 +286,16 @@ export const CustomerMenu: React.FC = () => {
 
   const effectivePrimaryColor = theme.primaryColor || themeColor;
 
-  // 🎨 نمط الخلفية الاحترافي: تملأ الشاشة بالكامل cover وتثبت أثناء التمرير
+  // Professional background style: full cover, fixed during scroll
   const pageContainerStyle: React.CSSProperties = {
-    backgroundColor: theme.menuBgColor || '#0f172a', // لون خلفية احتياطي داكن أو فاتح
+    backgroundColor: theme.menuBgColor || '#0f172a',
     backgroundImage: theme.menuBgType === 'image' && theme.menuBgImage 
       ? `url('${theme.menuBgImage}')`
       : 'none',
-    backgroundSize: 'cover',        // 👈 تغطي الشاشة بالكامل بدون فراغات بيضاء
-    backgroundPosition: 'center',   // 👈 تمركز الصورة بدقة
-    backgroundRepeat: 'no-repeat',  // 👈 منع التكرار
-    backgroundAttachment: 'fixed',  // 👈 تثبيت الخلفية أثناء التمرير لتبدو أنيقة
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+    backgroundAttachment: 'fixed',
     minHeight: '100vh',
   };
 
@@ -312,7 +305,7 @@ export const CustomerMenu: React.FC = () => {
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
       style={pageContainerStyle}
     >
-      {/* 🎯 طبقة الشفافية والضبابية فوق خلفية المنيو */}
+      {/* Overlay layer for background blur and opacity */}
       {theme.menuBgType === 'image' && theme.menuBgImage && (
         <div 
           className="absolute inset-0 pointer-events-none z-0"
@@ -329,7 +322,7 @@ export const CustomerMenu: React.FC = () => {
           lang={lang} 
           themeColor={effectivePrimaryColor} 
           logoUrl={theme.logoUrl}
-          bannerUrl={theme.menuBannerUrl} // 👈 إضافة رابط البانر للهيدر
+          bannerUrl={theme.menuBannerUrl}
           t={t} 
           onOpenReceipts={() => setShowReceipts(true)} 
         />
@@ -343,7 +336,7 @@ export const CustomerMenu: React.FC = () => {
         ) : (
           <main className="max-w-md mx-auto px-4 mt-4">
             
-            {/* 🎁 بنر التنبيه بالخصم */}
+            {/* Active discount banner */}
             {activeDiscount > 0 && !currentOrder && (
               <div className="mb-4 bg-emerald-500 text-white p-3.5 rounded-2xl shadow-lg flex items-center justify-between animate-pulse">
                 <div className="flex items-center gap-2.5">

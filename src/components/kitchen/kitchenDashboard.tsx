@@ -12,7 +12,7 @@ export const KitchenDashboard: React.FC = () => {
   const [lang, setLang] = useState<Language>('ar');
   const [searchParams] = useSearchParams();
 
- // دالة جلب معرف المطعم الحالي لضمان العزل مع التحقق الشامل
+  // Resolve the current restaurant ID with full fallback protection
   const getRestaurantId = () => {
     try {
       const paramId = searchParams.get('restaurantId');
@@ -47,12 +47,12 @@ export const KitchenDashboard: React.FC = () => {
 
   const currentRestaurantId = getRestaurantId();
 
-  // فلترة الطلبات النشطة: تُظهر الطلبات وتجعل المنتهية ضبابية، وتخفي تماماً ما تم دفعه أو إكماله
+  // Filter active orders: show them, dim finished ones, hide paid/completed entirely
   const activeOrders = orders.filter((o: any) => {
     const matchesRestaurant = o.restaurantId ? o.restaurantId === currentRestaurantId : true;
     const status = o.status as any;
     
-    // استبعاد الطلبات التي انتهت وتم دفعها أو إكمالها نهائياً لكي تختفي تماماً
+    // Exclude orders that are fully paid or completed so they disappear completely
     const isFinished = status === 'paid' || status === 'completed' || status === 'TrackDone';
     
     return matchesRestaurant && !isFinished;
@@ -71,12 +71,15 @@ export const KitchenDashboard: React.FC = () => {
   const OrderCard = ({ order }: { order: any }) => {
     const currentStatus = order.status as any;
 
-    // 🎯 إضافة حالة on_the_way هنا لتجعل الكارت ضبابياً ومقفل تفاعلياً بمجرد انطلاق السائق
+    // Include on_the_way so the card dims once the driver departs
     const isReadyForNextStep = 
       currentStatus === 'ready_for_payment' ||   
       currentStatus === 'ready_for_delivery' ||   
       currentStatus === 'on_the_way' ||   
       currentStatus === 'delivered_unpaid';
+
+    // Detect newly appended items so the kitchen can still interact with the card
+    const hasAppendedItems = Array.isArray(order.items) && order.items.some((item: any) => item.isAppended);
 
     const handleMarkAsReady = () => {
       if (order.tableNumber === '0') {
@@ -91,7 +94,7 @@ export const KitchenDashboard: React.FC = () => {
 
     return (
       <div className={`bg-white p-6 rounded-3xl shadow-md border border-slate-100 mb-6 transition-all hover:shadow-lg ${
-        isReadyForNextStep ? 'opacity-40 pointer-events-none filter blur-[0.5px]' : ''
+        isReadyForNextStep && !hasAppendedItems ? 'opacity-40 pointer-events-none filter blur-[0.5px]' : ''
       }`}>
         <div className="flex justify-between items-start mb-5 border-b pb-4">
         <div>
@@ -109,7 +112,7 @@ export const KitchenDashboard: React.FC = () => {
           </span>
         </div>
 
-        {/* عرض تفاصيل العنوان ورقم الهاتف للطلبات الخارجية */}
+        {/* Show address and phone for external delivery orders */}
         {(deliveryAddress || deliveryPhone) && (
           <div className="bg-amber-50 p-4 rounded-2xl mb-4 text-sm border border-amber-100">
             {deliveryAddress && <p className="text-amber-900"><strong>{t('address')}:</strong> {deliveryAddress}</p>}
@@ -117,7 +120,7 @@ export const KitchenDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* 🛵 عرض اسم السائق للمطبخ فور قيام السائق بحجز الطلبية */}
+        {/* Show the driver's name to the kitchen as soon as the order is claimed */}
         {order.driverName && (
           <div className="bg-blue-50 p-3 rounded-2xl mb-4 text-xs border border-blue-100 flex items-center gap-2 text-blue-900">
             <span>👤</span>
@@ -125,7 +128,7 @@ export const KitchenDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* قائمة الأصناف مع تمييز العناصر المضافة حديثاً */}
+        {/* Item list with newly appended items highlighted */}
         <ul className="text-sm space-y-3 mb-6">
           {Array.isArray(order.items) && order.items.map((item: any, idx: number) => {
             const rawName = item.name || item.nameAr || item.menuItem?.name;
@@ -174,7 +177,7 @@ export const KitchenDashboard: React.FC = () => {
             </button>
           )}
 
-          {/* السماح بزر إنهاء التحضير سواء كان الطلب في حالة preparing أو بعد أن حجزه السائق driver_claimed */}
+          {/* Allow marking ready whether the order is preparing or already claimed by a driver */}
           {(currentStatus === 'preparing' || currentStatus === 'driver_claimed') && (
             <button 
               onClick={handleMarkAsReady} 
@@ -183,7 +186,7 @@ export const KitchenDashboard: React.FC = () => {
               {t('readyFully')}
             </button>
           )}
-          {/* الرسائل التوضيحية للحالة في أسفل الكارت بما فيها حالة جاري التوصيل */}
+          {/* Status messages at the bottom of the card, including the en-route state */}
           {isReadyForNextStep && (
             <div className="flex-1 text-center py-2.5 bg-slate-100 rounded-2xl text-xs font-bold text-slate-500">
               {currentStatus === 'ready_for_payment' && t('waitingCashierPayment')}

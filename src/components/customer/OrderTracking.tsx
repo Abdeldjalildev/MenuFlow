@@ -2,15 +2,20 @@ import React, { useState, useContext } from 'react';
 import { OrderContext } from '../../context/OrderProvider';
 import { OrderStatus } from './orderStatus';
 import { useMenu } from '../../context/MenuContext';
-import { db } from '../../firebase';
-import { doc, updateDoc } from 'firebase/firestore';
 
 export const OrderTracking: React.FC<{ t: (key: string) => string }> = ({ t }) => {
-  const { orders } = useContext(OrderContext);
+  const { orders, updateOrderStatus, addReview } = useContext(OrderContext);
   const { currentTable } = useMenu();
 
+  const customerId = localStorage.getItem('menu_customer_id');
+
+  // Isolate the order to this specific customer and table, excluding finished orders
   const currentOrder = orders
-    .filter((o: any) => o.tableNumber === currentTable && o.status !== 'TrackDone')
+    .filter((o: any) => 
+      o.tableNumber === currentTable && 
+      o.status !== 'TrackDone' &&
+      (!customerId || o.customerId === customerId)
+    )
     .sort((a: any, b: any) => {
       const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
       const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
@@ -18,19 +23,16 @@ export const OrderTracking: React.FC<{ t: (key: string) => string }> = ({ t }) =
     })[0];
 
   const [rating, setRating] = useState(0);
-  const [, setReviewText] = useState("");
+  const [reviewText, setReviewText] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
   if (!currentOrder) return null;
 
   const handleFinishOrder = async () => {
     try {
-      const orderRef = doc(db, 'orders', currentOrder.id);
-      await updateDoc(orderRef, {
-        status: 'TrackDone'
-      });
+      await updateOrderStatus(currentOrder.id, 'TrackDone');
     } catch (error) {
-      console.error("خطأ في إنهاء الطلب:", error);
+      console.error("Error finishing order:", error);
     }
   };
 
@@ -44,9 +46,7 @@ export const OrderTracking: React.FC<{ t: (key: string) => string }> = ({ t }) =
         isRated={submitted}
       />
 
-
-      
-      {/* نموذج التقييم */}
+      {/* Review form */}
       {(currentOrder.status === 'paid' || currentOrder.status === 'completed' || currentOrder.status === 'delivered_unpaid') && !submitted && (
         <div className="mt-6 border-t border-slate-100 dark:border-slate-800 pt-6">
           <h3 className="text-center font-bold mb-4 text-slate-800 dark:text-white">{t('howWasExperience')}</h3>
@@ -56,7 +56,7 @@ export const OrderTracking: React.FC<{ t: (key: string) => string }> = ({ t }) =
                 key={star} 
                 onClick={() => setRating(star)} 
                 className={`text-2xl transition-transform ${rating >= star ? 'scale-125' : 'opacity-40'}`}
-              >``
+              >
                 ⭐️
               </button>
             ))}
@@ -68,6 +68,9 @@ export const OrderTracking: React.FC<{ t: (key: string) => string }> = ({ t }) =
           />
           <button 
             onClick={async () => { 
+              if (rating > 0 && currentOrder) {
+                await addReview(currentOrder.id, rating, reviewText);
+              }
               setSubmitted(true);
               setTimeout(async () => {
                 await handleFinishOrder();
@@ -83,7 +86,8 @@ export const OrderTracking: React.FC<{ t: (key: string) => string }> = ({ t }) =
       {submitted && (
         <p className="text-center text-green-600 font-bold mt-4">{t('thankYouReview')}</p>
       )}
-        {(currentOrder.status === 'completed' || currentOrder.status === 'delivered_unpaid' || currentOrder.status === 'paid') && (
+      
+      {(currentOrder.status === 'completed' || currentOrder.status === 'delivered_unpaid' || currentOrder.status === 'paid') && (
         <div className="mt-4 text-center border-t border-slate-100 dark:border-slate-800 pt-4">
           <button
             onClick={handleFinishOrder}

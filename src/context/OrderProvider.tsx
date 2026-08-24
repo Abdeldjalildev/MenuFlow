@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc, getDoc, serverTimestamp, where } from 'firebase/firestore';
 
-// 🎯 دالة جلب أو إنشاء معرّف الجهاز الفريد للزبون
+// Generate or retrieve a unique browser ID for the customer
 const getCustomerId = (): string => {
   let customerId = localStorage.getItem('menu_customer_id');
   if (!customerId) {
@@ -41,11 +41,11 @@ export const OrderContext = createContext<any>(null);
 export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [orders, setOrders] = useState<Order[]>([]);
 
-  // 🏢 معرف المطعم الحالي
+  // Current restaurant identifier
   const restaurantId = localStorage.getItem('restaurantId') || 'default_restaurant';
 
   useEffect(() => {
-    // 🏢 جلب الطلبات الخاصة بهذا المطعم فقط
+    // Fetch orders for the current restaurant only
     const q = query(
       collection(db, "orders"), 
       where("restaurantId", "==", restaurantId),
@@ -57,7 +57,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => unsubscribe();
   }, [restaurantId]);
 
-  // 🎯 إرسال الطلب وحفظ البيانات مع restaurantId
+  // Submit a new order and persist it with the restaurantId
   const placeOrder = async (items: any, tableNumber: string, deliveryData?: any, totalAmount?: number, extraOptions?: { customerId?: string }) => {
     if (!items) return;
 
@@ -73,7 +73,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const currentCustomerId = extraOptions?.customerId || getCustomerId();
     const shortId = currentCustomerId.slice(-4);
 
-    // حساب المجموع تلقائياً
+    // Auto-calculate the total amount
     const calculatedTotal = totalAmount ?? items.reduce((sum: number, item: any) => {
       const p = Number(item.price || item.unitPrice || 0);
       const q = Number(item.quantity || item.qty || 1);
@@ -81,11 +81,11 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, 0);
 
     const defaultName = tableNumber !== '0' 
-      ?` زبون طاولة #${tableNumber} (${shortId})`
-      :` زبون خارجي (${shortId})`;
+      ? ` زبون طاولة #${tableNumber} (${shortId})`
+      : ` زبون خارجي (${shortId})`;
 
     const orderPayload: any = { 
-      restaurantId: restaurantId, // 👈 ربط الطلب بالمطعم الحالي
+      restaurantId: restaurantId,
       items: items || [], 
       tableNumber: tableNumber || '0', 
       status: 'pending', 
@@ -105,20 +105,20 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await addDoc(collection(db, "orders"), orderPayload);
   };
 
-  // 🛵 دالة حجز الطلب بواسطة السائق
+  // Driver order claim logic
   const claimOrderForDriver = async (orderId: string, driverId: string, driverName: string) => {
     try {
       const orderRef = doc(db, "orders", orderId);
       const orderSnap = await getDoc(orderRef);
 
       if (!orderSnap.exists()) {
-        return { success: false, message: "الطلب غير موجود" };
+        return { success: false, message: "Order not found" };
       }
 
       const orderData = orderSnap.data();
-   // التحقق مما إذا كان الطلب محجوزاً مسبقاً من طرف سائق آخر
+      // Check if another driver has already claimed this order
       if (orderData.isClaimed && orderData.driverId && orderData.driverId !== driverId) {
-        return { success: false, message: "الطلب محجوز بالفعل بواسطة سائق آخر" };
+        return { success: false, message: "Order already claimed by another driver" };
       }
 
       await updateDoc(orderRef, {
@@ -130,23 +130,107 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       return { success: true };
     } catch (error) {
-      console.error("خطأ أثناء حجز الطلب للسائق:", error);
+      console.error("Error claiming order for driver:", error);
       return { success: false, error };
+    }
+  };
+
+  // Append items to an existing order and deduct inventory for the new items immediately
+  const appendToOrder = async (orderId: string, newItems: any[]) => {
+    try {
+      const orderRef = doc(db, "orders", orderId);
+      const orderSnap = await getDoc(orderRef);
+
+      if (!orderSnap.exists()) {
+        console.error("Order not found for append");
+        return;
+      }
+
+      const orderData = orderSnap.data();
+      const appendedItems = newItems.map(item => ({ ...item, isAppended: true }));
+      const updatedItems = [...(orderData.items || []), ...appendedItems];
+
+      const appendTotal = newItems.reduce((sum: number, item: any) => {
+        return sum + (Number(item.price || 0) * Number(item.quantity || 1));
+      }, 0);
+
+      const newTotal = Number(orderData.totalAmount || orderData.totalPrice || 0) + appendTotal;
+
+      await updateDoc(orderRef, {
+        items: updatedItems,
+        totalAmount: newTotal,
+        totalPrice: newTotal
+      });
+
+      // Deduct inventory for newly appended items only
+      const firestoreModule = await import('firebase/firestore');
+      const recipesQuery = firestoreModule.query(
+        firestoreModule.collection(db, 'recipes'),
+        firestoreModule.where('restaurantId', '==', restaurantId)
+      );
+      const recipesSnapshot = await firestoreModule.getDocs(recipesQuery);
+      const recipesList = recipesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
+      for (const item of appendedItems) {
+        const itemQty = Number(item.quantity || item.qty || 1);
+        const matchedRecipe: any = recipesList.find((r: any) => {
+          if (item.recipeId && r.id === item.recipeId) return true;
+          if (item.menuItemId && r.menuItemId === item.menuItemId) return true;
+          if (r.id === item.id || r.menuItemId === item.id) return true;
+
+          const itemNameStr = typeof item.name === 'string' ? item.name : item.name?.ar;
+          const itemArStr = item.nameAr || itemNameStr;
+
+          return (
+            (r.nameAr && (r.nameAr === itemArStr || r.nameAr === itemNameStr)) ||
+            (r.nameFr && r.nameFr === item.name) ||
+            (r.nameEn && r.nameEn === item.name)
+          );
+        });
+
+        if (matchedRecipe && Array.isArray(matchedRecipe.recipeIngredients)) {
+          for (const ing of matchedRecipe.recipeIngredients) {
+            if (!ing.inventoryItemId || !ing.quantity) continue;
+
+            const invRef = doc(db, 'inventory', ing.inventoryItemId);
+            const invSnap = await firestoreModule.getDoc(invRef);
+
+            if (invSnap.exists()) {
+              const invData = invSnap.data();
+              const currentStock = Number(invData.currentQuantity ?? invData.quantity ?? 0);
+              const totalDeduction = Number(ing.quantity) * itemQty;
+              const newStock = Math.max(0, currentStock - totalDeduction);
+
+              await updateDoc(invRef, {
+                quantity: newStock,
+                currentQuantity: newStock,
+                updatedAt: firestoreModule.serverTimestamp()
+              });
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error appending to order:", error);
     }
   };
 
   const updateOrderStatus = async (orderId: string, newStatus: any) => {
     const orderRef = doc(db, "orders", orderId);
-    await updateDoc(orderRef, { status: newStatus });
+    const payload: any = { status: newStatus };
+    if (newStatus === 'completed') {
+      payload.isPaid = true;
+    }
+    await updateDoc(orderRef, payload);
 
-    // 1️⃣ خصم المكونات من المخزون عند تجهيز الطلب
+    // Deduct recipe ingredients from inventory when order is ready
     if (newStatus === 'ready_for_payment' || newStatus === 'ready_for_delivery' || newStatus === 'ready') {
       try {
         const currentOrder = orders.find(o => o.id === orderId);
         if (!currentOrder || !currentOrder.items || !Array.isArray(currentOrder.items)) return;
         
         const firestoreModule = await import('firebase/firestore');
-        // جلب الوصفات الخاصة بالمطعم فقط
+        // Fetch recipes belonging to this restaurant only
         const recipesQuery = firestoreModule.query(
           firestoreModule.collection(db, 'recipes'),
           firestoreModule.where('restaurantId', '==', restaurantId)
@@ -165,7 +249,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const itemArStr = item.nameAr || itemNameStr;
 
             return (
-              (r.nameAr && (r.nameAr === itemArStr || r.nameAr === itemNameStr)) 
+              (r.nameAr && (r.nameAr === itemArStr || r.nameAr === itemNameStr)) ||
               (r.nameFr && r.nameFr === item.name) ||
               (r.nameEn && r.nameEn === item.name)
             );
@@ -194,17 +278,18 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
         }
       } catch (error) {
-        console.error("خطأ أثناء خصم المكونات من المخزون:", error);
+        console.error("Error deducting ingredients from inventory:", error);
       }
     }
 
-    // 2️⃣ عند الدفع (Paid): حساب الهالك + تصفير الخصم المستهلك + إضافة نقاط الولاء
-    if (newStatus === 'paid' || newStatus === 'delivered_unpaid') {
+    // Payment & completion side effects: loyalty points, discount reset, waste logging
+    // Fires only on final payment states, not on intermediate delivery handoff
+    if (newStatus === 'paid' || newStatus === 'completed') {
       try {
         const currentOrder = orders.find(o => o.id === orderId);
         if (!currentOrder) return;
 
-        // 🟢 أ) تصفير الخصم وزيادة نقاط الولاء للزبون
+        // Reset active discount and award loyalty points
         if (currentOrder.customerId) {
           const customerRef = doc(db, 'customers', currentOrder.customerId);
           const customerSnap = await getDoc(customerRef);
@@ -230,7 +315,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
         }
 
-        // 🟢 ب) احتساب تكلفة الهالك والمبيعات
+        // Calculate estimated loss / waste cost
         if (currentOrder.items && Array.isArray(currentOrder.items)) {
           const firestoreModule = await import('firebase/firestore');
           const recipesQuery = firestoreModule.query(
@@ -264,16 +349,16 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (totalOrderCost > 0) {
             const wasteLogRef = collection(db, "waste_log");
             await addDoc(wasteLogRef, {
-              restaurantId: restaurantId, // 👈 وسم سجل الهالك بالمطعم
+              restaurantId: restaurantId,
               orderId: orderId,
               estimatedLoss: totalOrderCost,
-              reason: "استهلاك تلقائي عبر المبيعات",
+              reason: "Automatic consumption via sales",
               createdAt: new Date()
             });
           }
         }
       } catch (error) {
-        console.error("خطأ أثناء معالجة الدفع ونظام النقاط:", error);
+        console.error("Error processing payment and loyalty system:", error);
       }
     }
   };
@@ -297,10 +382,10 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       await addDoc(complaintsRef, {
         restaurantId: restaurantId,
         orderId,
-        customerName: currentOrder?.customerName || 'زبون',
+        customerName: currentOrder?.customerName || 'Customer',
         customerPhone: currentOrder?.customerPhone || currentOrder?.deliveryData?.phone || '',
         tableNumber: currentOrder?.tableNumber || '0',
-        message: comment || (rating >= 4 ? 'رأي إيجابي بدون تعليق' : 'ملاحظة/شكوى بدون تعليق'),
+        message: comment || (rating >= 4 ? 'Positive feedback without comment' : 'Note/complaint without comment'),
         rating: rating,
         status: 'pending',
         createdAt: serverTimestamp(),
@@ -308,12 +393,12 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
 
     } catch (error) {
-      console.error("خطأ أثناء إرسال التقييم السحابي لقسم التقارير والشكاوى:", error);
+      console.error("Error syncing review to reports and complaints:", error);
     }
   };
 
   return (
-    <OrderContext.Provider value={{ orders, placeOrder, updateOrderStatus, addReview, claimOrderForDriver }}>
+    <OrderContext.Provider value={{ orders, placeOrder, appendToOrder, updateOrderStatus, addReview, claimOrderForDriver }}>
       {children}
     </OrderContext.Provider>
   );

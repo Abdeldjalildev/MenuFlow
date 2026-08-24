@@ -1,146 +1,113 @@
-import React, { useState, useEffect } from 'react';
-import { MenuContext } from './MenuContext';
-import type { MenuItem } from './MenuContext'; 
+import React, { createContext, useState, useEffect, useContext } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
+
+export const MenuContext = createContext<any>(null);
+
+export const useMenu = () => useContext(MenuContext);
+
+// Starter template items for new restaurants that haven't configured a menu yet
+const defaultItems = [
+  { 
+    id: 'default_1', 
+    name: { ar: 'برجر كلاسيك', en: 'Classic Burger', fr: 'Burger Classique' }, 
+    price: 450, 
+    category: 'burgers', 
+    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=60' 
+  },
+  { 
+    id: 'default_2', 
+    name: { ar: 'بيتزا مارغريتا', en: 'Margherita Pizza', fr: 'Pizza Margherita' }, 
+    price: 600, 
+    category: 'pizzas', 
+    image: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=500&q=60' 
+  },
+  { 
+    id: 'default_3', 
+    name: { ar: 'باستا ألفريدو', en: 'Alfredo Pasta', fr: 'Pâtes Alfredo' }, 
+    price: 550, 
+    category: 'pasta', 
+    image: 'https://images.unsplash.com/photo-1555949258-eb67b1ef0ceb?auto=format&fit=crop&w=500&q=60' 
+  },
+  { 
+    id: 'default_4', 
+    name: { ar: 'سلطة سيزر', en: 'Caesar Salad', fr: 'Salade César' }, 
+    price: 350, 
+    category: 'salads', 
+    image: 'https://images.unsplash.com/photo-1550304943-4f24f54ddde9?auto=format&fit=crop&w=500&q=60' 
+  },
+  { 
+    id: 'default_5', 
+    name: { ar: 'كباب مشوي', en: 'Grilled Kebab', fr: 'Kebab Grillé' }, 
+    price: 700, 
+    category: 'grill', 
+    image: 'https://images.unsplash.com/photo-1603360946369-dc9bb6f54262?auto=format&fit=crop&w=500&q=60' 
+  },
+  { 
+    id: 'default_6', 
+    name: { ar: 'تشيز كيك فراولة', en: 'Strawberry Cheesecake', fr: 'Cheesecake Fraise' }, 
+    price: 300, 
+    category: 'desserts', 
+    image: 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=500&q=60' 
+  }
+];
 
 export const MenuProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentTable, setCurrentTable] = useState<string | null>(null);
-  const [themeColor, setThemeColor] = useState<string>('#6366f1');
+  const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [themeColor, setThemeColor] = useState('#4f46e5');
+  const [currentTable, setCurrentTable] = useState<string>('0');
+  const [restaurantId, setRestaurantId] = useState<string>('default_restaurant');
 
-  // 🎯 إدارة معرف المطعم (restaurantId)
-  const [restaurantId, setRestaurantId] = useState<string>(() => {
-    // يمكن جلبه من الرابط أو التخزين المحلي، أو تعيين مطعم افتراضي مؤقت للتجربة
-    const urlParams = new URLSearchParams(window.location.search);
-    const restFromUrl = urlParams.get('restaurantId');
-    if (restFromUrl) {
-      localStorage.setItem('restaurantId', restFromUrl);
-      return restFromUrl;
-    }
-    return localStorage.getItem('restaurantId') || 'default_restaurant';
-  });
-
-  // العناصر الثابتة الافتراضية
-  const defaultItems: MenuItem[] = [
-    {
-      id: 'm1',
-      name: { ar: 'برجر كلاسيك تفجير', en: 'Classic Beef Burger', fr: 'Burger Bœuf Classique' },
-      description: { ar: 'لحم بقري مشوي مع جبنة شيدر سائلة وصلصة سرية', en: 'Grilled beef patty with melted cheddar and secret sauce', fr: 'Steak de bœuf grillé, cheddar fondu et sauce secrète' },
-      price: 12.5,
-      image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500',
-      category: 'burgers',
-      attributes: { isVegetarian: false, isSpicy: false, isGlutenFree: false }
-    },
-    {
-      id: 'm2',
-      name: { ar: 'بيتزا مارغريتا إيطالية', en: 'Pizza Margherita', fr: 'Pizza Margherita' },
-      description: { ar: 'صلصة طماطم إيطالية مع جبنة موزاريلا طازجة وريحان عطر', en: 'Italian tomato sauce with fresh mozzarella and basil', fr: 'Sauce tomate italienne, mozzarella fraîche et basilic' },
-      price: 14.0,
-      image: 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=500',
-      category: 'pizza',
-      attributes: { isVegetarian: true, isSpicy: false, isGlutenFree: false }
-    },
-    {
-      id: 'm3',
-      name: { ar: 'بطاطس مقرمشة بالجبن', en: 'Cheesy Fries', fr: 'Frites au Fromage' },
-      description: { ar: 'أصابع بطاطس ذهبية مغطاة بصلصة الجبن الغنية وحبيبات الهالابينو', en: 'Golden fries smothered in rich cheese sauce and jalapenos', fr: 'Frites dorées nappées de sauce au fromage et jalapeños' },
-      price: 6.0,
-      image: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=500',
-      category: 'appetizers',
-      attributes: { isVegetarian: true, isSpicy: true, isGlutenFree: true }
-    },
-    {
-      id: 'm4',
-      name: { ar: 'سلطة سيزر بالدجاج', en: 'Chicken Caesar Salad', fr: 'Salade César au Poulet' },
-      description: { ar: 'خس مقرمش مع صدور دجاج مشوية، خبز محمص وجبنة بارميزان', en: 'Crispy lettuce with grilled chicken, croutons, and parmesan', fr: 'Laitue croquante, poulet grillé, croûtons et parmesan' },
-      price: 9.5,
-      image: 'https://images.unsplash.com/photo-1512852939750-13b009e519e6?w=500',
-      category: 'salads',
-      attributes: { isVegetarian: false, isSpicy: false, isGlutenFree: false }
-    },
-    {
-      id: 'm5',
-      name: { ar: 'دجاج مقرمش حار', en: 'Spicy Fried Chicken', fr: 'Poulet Frit Épicé' },
-      description: { ar: 'قطع دجاج مقلية بخلطة توابل حارة سرية تقدم مع صوص المايونيز', en: 'Fried chicken pieces with a secret spicy blend, served with mayo', fr: 'Morceaux de poulet frits aux épices secrètes, servis avec mayo' },
-      price: 11.0,
-      image: 'https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?w=500',
-      category: 'main',
-      attributes: { isVegetarian: false, isSpicy: true, isGlutenFree: false }
-    },
-    {
-      id: 'm6',
-      name: { ar: 'تشيز كيك الفراولة', en: 'Strawberry Cheesecake', fr: 'Cheesecake aux Fraises' },
-     description: { ar: 'طبقة كريمية غنية مغطاة بصوص الفراولة الطازجة', en: 'Rich creamy layer topped with fresh strawberry sauce', fr: 'Couche crémeuse riche nappée de sauce aux fraises fraîches' },
-      price: 7.5,
-      image: 'https://images.unsplash.com/photo-1533134242443-d4fd215305ad?w=500',
-      category: 'desserts',
-      attributes: { isVegetarian: true, isSpicy: false, isGlutenFree: false }
-    }
-  ];
-
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(defaultItems);
-
-  // جلب رقم الطاولة من الرابط
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tableFromUrl = urlParams.get('table');
-    if (tableFromUrl) {
-      setCurrentTable(tableFromUrl);
-      localStorage.setItem('tableId', tableFromUrl);
+    const params = new URLSearchParams(window.location.search);
+    const rId = params.get('restaurantId') || localStorage.getItem('restaurantId') || 'default_restaurant';
+    setRestaurantId(rId);
+    if (rId) localStorage.setItem('restaurantId', rId);
+
+    const table = params.get('table');
+    if (table) {
+      setCurrentTable(table);
+      localStorage.setItem('currentTable', table);
     } else {
-      const savedTable = localStorage.getItem('tableId');
+      const savedTable = localStorage.getItem('currentTable');
       if (savedTable) setCurrentTable(savedTable);
     }
-  }, []);
 
-  // 🔄 الربط الحي مع الفايربيس (مع تصفية البيانات حصرياً حسب restaurantId)
-  useEffect(() => {
-    if (!restaurantId) return;
+    // Fetch the restaurant's theme color from Firestore
+    const fetchTheme = async () => {
+      try {
+        const themeDoc = await getDoc(doc(db, 'restaurants', rId, 'settings', 'theme'));
+        if (themeDoc.exists()) {
+          const data = themeDoc.data();
+          setThemeColor(data.primaryColor || '#4f46e5');
+        }
+      } catch (error) {
+        console.error("Error fetching theme:", error);
+      }
+    };
+    fetchTheme();
 
-    // استعلام لفلترة الأطباق التابعة لهذا المطعم فقط
-    const q = query(
-      collection(db, 'menu'),
-      where('restaurantId', '==', restaurantId)
-    );
-
+    // Fetch live menu items for this specific restaurant
+    const q = query(collection(db, 'restaurants', rId, 'menuItems'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const dbItems: MenuItem[] = snapshot.docs
-        .map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            name: typeof data.name === 'object' ? data.name : { ar: data.nameAr || data.name || '', en: data.name || '', fr: data.name || '' },
-            description: typeof data.description === 'object' ? data.description : { ar: data.description || '', en: '', fr: '' },
-            price: Number(data.price || 0),
-            image: data.image || data.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500',
-            category: data.category || 'burgers',
-            available: data.available !== false,
-            attributes: data.attributes || { isVegetarian: false, isSpicy: false, isGlutenFree: false }
-          };
-        })
-        .filter((item) => item.available);
-
-      // دمج العناصر الافتراضية مع عناصر المطعم الحالي
-      setMenuItems([...defaultItems, ...dbItems]);
+      const dbItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      // Only show starter template items when the restaurant has no custom menu yet.
+      // Once a restaurant adds even one real item, defaults are fully replaced.
+      if (dbItems.length > 0) {
+        setMenuItems(dbItems);
+      } else {
+        setMenuItems([...defaultItems]);
+      }
     }, (error) => {
-      console.error("Error fetching menu items by restaurantId:", error);
+      console.error("Error fetching menu items:", error);
     });
 
     return () => unsubscribe();
-  }, [restaurantId]);
-
-  const setTable = (tableNum: string) => {
-    setCurrentTable(tableNum);
-    localStorage.setItem('tableId', tableNum);
-  };
-
-  const handleSetRestaurantId = (id: string) => {
-    setRestaurantId(id);
-    localStorage.setItem('restaurantId', id);
-  };
+  }, []);
 
   return (
-    <MenuContext.Provider value={{ menuItems, themeColor, setThemeColor, currentTable, setTable, restaurantId, setRestaurantId: handleSetRestaurantId }}>
+    <MenuContext.Provider value={{ menuItems, themeColor, currentTable, setCurrentTable, restaurantId }}>
       {children}
     </MenuContext.Provider>
   );

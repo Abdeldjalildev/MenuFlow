@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext } from 'react';
 
-// هيكل الوجبة في السلة مع الملاحظات والسعر
+// Cart line item shape with notes and pricing
 export interface CartItem {
   id: string;
   name: string;
@@ -10,16 +10,26 @@ export interface CartItem {
   image?: string;
 }
 
+// Menu item shape as referenced by cart resolution functions
+interface MenuItem {
+  id?: string;
+  _id?: string;
+  name?: string | Record<string, string>;
+  nameAr?: string;
+  price?: number;
+  image?: string;
+}
+
 interface CartContextType {
   cart: { [key: string]: number };
   notes: { [key: string]: string };
-  handleAddToCart: (id: string, itemData?: { name?: string; price?: number; image?: string }) => void;
+  handleAddToCart: (id: string) => void;
   removeFromCart: (id: string) => void;
   updateNote: (id: string, note: string) => void;
   clearCart: () => void;
   cartCount: number;
-  getCartItemsDetails: (menuItems: any[]) => CartItem[];
-  calculateTotal: (menuItems: any[]) => number;
+  getCartItemsDetails: (menuItems: MenuItem[]) => CartItem[];
+  calculateTotal: (menuItems: MenuItem[]) => number;
 }
 
 export const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -54,8 +64,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const cartCount = Object.values(cart).reduce((a, b) => a + b, 0);
 
-  // دالة لتجهيز قائمة العناصر كاملة بالأسماء والأسعار والملاحظات
-  const getCartItemsDetails = (menuItems: any[]): CartItem[] => {
+  // Resolve cart IDs into full item objects using the current menu
+  const getCartItemsDetails = (menuItems: MenuItem[]): CartItem[] => {
     return Object.keys(cart).map(id => {
       const item = menuItems.find(m => m.id === id || m._id === id);
       return {
@@ -69,8 +79,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  // دالة حساب المجموع الكلي
-  const calculateTotal = (menuItems: any[]): number => {
+  // Compute the cart total from live menu pricing
+  const calculateTotal = (menuItems: MenuItem[]): number => {
     return Object.keys(cart).reduce((sum, id) => {
       const item = menuItems.find(m => m.id === id || m._id === id);
       const price = Number(item?.price || 0);

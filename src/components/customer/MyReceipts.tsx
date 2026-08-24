@@ -1,171 +1,158 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { db } from '../../firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { DigitalReceipt } from '../Receipt/DigitalReceipt';
+import React, { useState, useContext } from 'react';
+import { OrderContext } from '../../context/OrderProvider';
 import { myReceiptsTranslations } from '../../utils/translations/myReceiptsTranslations';
+import { ArrowLeft, Receipt, Star, Clock, MapPin, Phone } from 'lucide-react';
 
 type Language = 'ar' | 'fr' | 'en';
 
 interface MyReceiptsProps {
-  lang?: Language;
+  lang: Language;
   activeOrderId?: string;
-  customerPhone?: string;
-  onBack?: () => void;
+  onBack: () => void;
 }
 
-// 🎯 دالة آمنة لجلب معرّف الزبون الخاص بالمتصفح/الهاتف
-const getCustomerId = (): string => {
-  return localStorage.getItem('menu_customer_id') || '';
-};
+export const MyReceipts: React.FC<MyReceiptsProps> = ({ lang, activeOrderId, onBack }) => {
+  const { orders } = useContext(OrderContext);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(activeOrderId || null);
 
-export const MyReceipts: React.FC<MyReceiptsProps> = ({
-  lang = 'ar',
-  activeOrderId,
-  customerPhone,
-  onBack,
-}) => {
-  const [paidOrders, setPaidOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchParams] = useSearchParams();
-
-  // جلب معرف المطعم الحالي لضمان العزل التام
-  const getRestaurantId = () => {
-    return searchParams.get('restaurantId') || localStorage.getItem('restaurantId') || 'default_restaurant';
+  const t = (key: string) => {
+    return (myReceiptsTranslations[lang] as any)?.[key] || (myReceiptsTranslations['ar'] as any)?.[key] || key;
   };
 
-  const currentRestaurantId = getRestaurantId();
+  const safeText = (field: any, fallback: string = '') => {
+    if (!field) return fallback;
+    if (typeof field === 'string' || typeof field === 'number') return String(field);
+    if (typeof field === 'object') {
+      return field[lang] || field.ar || field.fr || field.en || fallback;
+    }
+    return fallback;
+  };
 
-  // استدعاء الترجمات بحسب اللغة الحالية مع حماية Fallback
-  const t = myReceiptsTranslations[lang] || myReceiptsTranslations.ar || myReceiptsTranslations['ar'];
+  // Derive receipt history from centralized context data instead of a local listener
+  const customerId = localStorage.getItem('menu_customer_id');
+  const myOrders = orders.filter((o: any) => {
+    const isMine = !customerId || o.customerId === customerId;
+    const isFinished = o.status === 'completed' || o.status === 'paid' || o.status === 'TrackDone';
+    return isMine && isFinished;
+  });
 
-  useEffect(() => {
-    const ordersRef = collection(db, 'orders');
-    const localCustomerId = getCustomerId();
-    
-    const unsubscribe = onSnapshot(ordersRef, (snapshot) => {
-      const ordersList: any[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        
-        // 🎯 0️⃣ التحقق الصارم من عزل المطعم (يجب أن تتطابق تماماً، وتستبعد الطلبات القديمة التي لا تحتوي على restaurantId)
-        if (!data.restaurantId || data.restaurantId !== currentRestaurantId) {
-          return;
-        }
+  const selectedOrder = myOrders.find((o: any) => o.id === selectedOrderId);
 
-        // 1️⃣ الفاتورة يجب أن تكون مدفوعة أو مكتملة أو حالتها paid
-        const isPaidOrder = data.isPaid === true || data.status === 'completed' || data.status === 'paid' || data.status === 'delivered_unpaid';
-
-        if (isPaidOrder) {
-          // 2️⃣ الشرط الدقيق والآمن لعزل الزبائن عن بعضهم:
-          const isMyReceipt = 
-            (localCustomerId && data.customerId === localCustomerId) || 
-            (activeOrderId && doc.id === activeOrderId) || 
-            (customerPhone && (data.customerPhone === customerPhone || data.deliveryData?.phone === customerPhone));
-
-          if (isMyReceipt) {
-            ordersList.push({
-              id: doc.id,
-              ...data,
-            });
-          }
-        }
-      });
-
-      // ✅ الترتيب الصحيح من الأحدث إلى الأقدم (Newest First)
-      ordersList.sort((a, b) => {
-        const getTime = (order: any) => {
-          const rawTime = order.receiptGeneratedAt || order.createdAt;
-          if (!rawTime) return 0;
-          
-          if (typeof rawTime.toDate === 'function') {
-            return rawTime.toDate().getTime();
-          }
-          if (rawTime.seconds) {
-            return rawTime.seconds * 1000;
-          }
-          return new Date(rawTime).getTime() || 0;
-        };
-
-        return getTime(b) - getTime(a);
-      });
-
-      setPaidOrders(ordersList);
-      setLoading(false);
-    }, (error) => {
-      console.error("خطأ في جلب الفواتير الرقمية:", error);
-      setLoading(false);
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleDateString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-US', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
-
-    return () => unsubscribe();
-  }, [activeOrderId, customerPhone, currentRestaurantId]);
-
-  const filteredOrders = paidOrders.filter((order) =>
-    order.id.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-4 sm:p-6" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <div className="max-w-2xl mx-auto space-y-6">
-          {/* شريط العنوان والتنقل */}
-        <div className="flex justify-between items-center border-b border-slate-800 pb-4">
-          <div>
-            <h1 className="text-2xl font-black text-white">{t?.title || 'فواتيري الرقمية'}</h1>
-            <p className="text-xs text-slate-400 mt-1">{t?.subtitle || 'سجل جميع طلباتك المدفوعة'}</p>
-          </div>
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-4 py-2 rounded-xl border border-slate-700 transition-all active:scale-95 cursor-pointer"
-            >
-              {t?.backBtn || 'العودة للمنيو'}
-            </button>
-          )}
-        </div>
-
-        {/* حقل البحث وإحصاء الفواتير */}
-        {paidOrders.length > 0 && (
-          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-            <div className="relative w-full sm:w-72">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t?.searchPlaceholder || 'بحث برقم المرجع...'}
-                className="w-full bg-slate-800/80 border border-slate-700 rounded-2xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all"
-              />
-            </div>
-            <span className="text-xs font-bold text-slate-400 bg-slate-800/50 px-3 py-1.5 rounded-xl border border-slate-700/50">
-              {t?.totalCount || 'مجموع الفواتير:'} <strong className="text-emerald-400">{filteredOrders.length}</strong>
-            </span>
-          </div>
-        )}
-
-        {/* قائمة عرض الفواتير الرقمية */}
-        {loading ? (
-          <div className="text-center py-16 text-slate-500 text-sm animate-pulse">
-            {t?.loadingText || 'جاري تحميل فواتيرك...'}
-          </div>
-        ) : filteredOrders.length === 0 ? (
-          <div className="text-center py-16 bg-slate-800/40 rounded-3xl border border-dashed border-slate-800 p-8 space-y-3">
-            <span className="text-5xl block">🧾</span>
-            <h3 className="text-base font-bold text-slate-300">{t?.noReceipts || 'لا توجد فواتير سابقة'}</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">{t?.noReceiptsSub || 'عند قيامك بطلب وجبة وإتمام دفعها ستظهر فاتورتك هنا فوراً.'}</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {filteredOrders.map((order) => (
-              <DigitalReceipt
-                key={order.id}
-                order={order}
-                lang={lang}
-              />
-            ))}
-          </div>
-        )}
-
+    <div className="max-w-md mx-auto px-4 pb-24">
+      <div className="flex items-center gap-3 mb-6">
+        <button 
+          onClick={onBack} 
+          className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 transition"
+        >
+          <ArrowLeft size={20} className="text-slate-600 dark:text-slate-300" />
+        </button>
+        <h2 className="text-xl font-bold text-slate-800 dark:text-white">{t('myReceipts')}</h2>
       </div>
+
+      {myOrders.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">
+          <Receipt size={48} className="mx-auto mb-4 opacity-40" />
+          <p>{t('noReceipts')}</p>
+        </div>
+      ) : selectedOrder ? (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+            <div>
+              <h3 className="font-bold text-slate-800 dark:text-white">
+                {t('order')} #{selectedOrder.orderNumber || selectedOrder.id?.substring(0, 6)}
+              </h3>
+              <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
+                <Clock size={12} /> {formatDate(selectedOrder.createdAt)}
+              </p>
+            </div>
+            <button 
+              onClick={() => setSelectedOrderId(null)} 
+              className="text-xs text-indigo-600 font-bold hover:underline"
+            >
+              {t('backToList')}
+            </button>
+          </div>
+
+          <div className="p-4">
+            {selectedOrder.deliveryData?.address && (
+              <div className="flex items-start gap-2 mb-3 text-xs text-slate-600 dark:text-slate-400">
+                <MapPin size={14} className="mt-0.5 shrink-0 text-slate-400" />
+                <span>{safeText(selectedOrder.deliveryData.address)}</span>
+              </div>
+            )}
+            {selectedOrder.deliveryData?.phone && (
+              <div className="flex items-center gap-2 mb-3 text-xs text-slate-600 dark:text-slate-400">
+                <Phone size={14} className="shrink-0 text-slate-400" />
+                <span dir="ltr">{selectedOrder.deliveryData.phone}</span>
+              </div>
+            )}
+
+            <ul className="space-y-2 mb-4">
+              {Array.isArray(selectedOrder.items) && selectedOrder.items.map((item: any, idx: number) => (
+                <li key={idx} className="flex justify-between text-sm text-slate-700 dark:text-slate-300">
+                  <span>{safeText(item.name || item.nameAr, 'Item')} x{item.quantity || 1}</span>
+                  <span className="font-bold">
+                    {((item.price || 0) * (item.quantity || 1)).toLocaleString()} {t('currency')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-3 flex justify-between items-center">
+              <span className="font-bold text-slate-800 dark:text-white">{t('total')}</span>
+              <span className="text-lg font-black text-emerald-600">
+                {Number(selectedOrder.totalAmount || selectedOrder.totalPrice || 0).toLocaleString()} {t('currency')}
+              </span>
+            </div>
+
+            {selectedOrder.rating && (
+              <div className="mt-3 flex items-center gap-1 text-amber-500">
+                <Star size={14} fill="currentColor" />
+                <span className="text-xs font-bold">{selectedOrder.rating}/5</span>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {myOrders.map((order: any) => (
+            <button
+              key={order.id}
+              onClick={() => setSelectedOrderId(order.id)}
+              className="w-full text-left bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all"
+            >
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-white">
+                    {t('order')} #{order.orderNumber || order.id?.substring(0, 6)}
+                  </h3>
+                  <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+                    <Clock size={10} /> {formatDate(order.createdAt)}
+                  </p>
+                </div>
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-lg">
+                  {Number(order.totalAmount || order.totalPrice || 0).toLocaleString()} {t('currency')}
+                </span>
+              </div>
+              {order.rating && (
+                <div className="flex items-center gap-1 text-amber-500 mt-1">
+                  <Star size={12} fill="currentColor" />
+                  <span className="text-[10px] font-bold">{order.rating}/5</span>
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

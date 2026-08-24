@@ -1,34 +1,46 @@
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 /**
- * دالة حجز الطلب من قبل السائق (First-Come, First-Served)
- * تم تعزيزها لتحديث حالة الطلب إلى 'driver_claimed' وإسناد السائق فوراً
+ * Claim an order for a delivery driver (first-come, first-served).
+ * Performs a read-before-write check to prevent race-condition overwrites.
  */
 export const claimOrderForDriver = async (
-  orderId: string, 
-  driverId: string, 
+  orderId: string,
+  driverId: string,
   driverName: string
-): Promise<{ success: boolean; error?: any }> => {
+): Promise<{ success: boolean; message?: string; error?: any }> => {
   try {
     const orderRef = doc(db, 'orders', orderId);
-    
-    // التحقق من أن الاسم صالح وليس القيمة الافتراضية المبهمة إن وجد بديل في التخزين
-    const finalDriverName = driverName && driverName !== 'السائق' 
-      ? driverName 
-      : (localStorage.getItem('userName') || localStorage.getItem('driverName') || 'سائق توصيل');
+    const orderSnap = await getDoc(orderRef);
+
+    if (!orderSnap.exists()) {
+      return { success: false, message: 'Order not found' };
+    }
+
+    const orderData = orderSnap.data();
+
+    // Prevent claiming if another driver already owns it
+    if (orderData.isClaimed && orderData.driverId && orderData.driverId !== driverId) {
+      return { success: false, message: 'Order already claimed by another driver' };
+    }
+
+    const finalDriverName =
+      driverName && driverName !== 'السائق'
+        ? driverName
+        : (localStorage.getItem('userName') || localStorage.getItem('driverName') || 'Delivery Driver');
 
     await updateDoc(orderRef, {
-      driverId: driverId,
+      driverId,
       driverName: finalDriverName,
       isClaimed: true,
-      status: 'driver_claimed', // 👈 تحديث الحالة لتفعيل المنظومة البصرية الجديدة
-      claimedAt: new Date()
+      status: orderData.status === 'preparing' ? 'driver_claimed' : orderData.status,
+      claimedAt: new Date(),
     });
 
     return { success: true };
   } catch (error) {
-    console.error("خطأ أثناء محاولة حجز الطلب:", error);
+    console.error('Error claiming order for driver:', error);
     return { success: false, error };
   }
 };
