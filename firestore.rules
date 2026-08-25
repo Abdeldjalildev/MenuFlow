@@ -32,10 +32,17 @@ service cloud.firestore {
       return data.restaurantId is string && canManageRestaurant(data.restaurantId);
     }
 
-    // Public menu reads are required by the customer-facing QR menu.
+    function preservesTenant(resourceData, requestData) {
+      return resourceData.restaurantId == requestData.restaurantId;
+    }
+
     match /restaurants/{restaurantId}/menuItems/{menuItemId} {
       allow read: if true;
-      allow write: if canManageRestaurant(restaurantId);
+      allow create: if canManageRestaurant(restaurantId)
+        && request.resource.data.restaurantId == restaurantId;
+      allow update, delete: if canManageRestaurant(restaurantId)
+        && resource.data.restaurantId == restaurantId
+        && request.resource.data.restaurantId == restaurantId;
     }
 
     match /restaurants/{restaurantId}/settings/{settingId} {
@@ -43,57 +50,96 @@ service cloud.firestore {
       allow write: if canManageRestaurant(restaurantId);
     }
 
-    // Restaurant documents are public-read only when the customer menu needs them.
-    // Administrative writes remain restricted to the SuperAdmin boundary.
     match /restaurants/{restaurantId} {
       allow read: if true;
       allow create, update, delete: if isSuperAdmin();
     }
 
     match /orders/{orderId} {
-      // Customer order creation is intentionally left open until customer identity
-      // is migrated from localStorage IDs to Firebase Auth/anonymous Auth.
+      // Customer order creation remains open until customer identity is migrated
+      // from localStorage IDs to Firebase Auth/anonymous Auth.
       allow create: if request.resource.data.restaurantId is string;
-      allow read, update, delete: if ownsRestaurantData(resource.data);
+      allow read: if ownsRestaurantData(resource.data);
+      allow update: if ownsRestaurantData(resource.data)
+        && preservesTenant(resource.data, request.resource.data);
+      allow delete: if ownsRestaurantData(resource.data);
     }
 
     match /staff/{staffId} {
       allow read: if isSuperAdmin()
         || (signedIn() && request.auth.token.restaurantId == resource.data.restaurantId);
-      allow create, update, delete: if isSuperAdmin()
+      allow create: if isSuperAdmin()
+        || (signedIn()
+          && role() == 'Admin'
+          && request.auth.token.restaurantId == request.resource.data.restaurantId);
+      allow update: if isSuperAdmin()
+        || (signedIn()
+          && role() == 'Admin'
+          && request.auth.token.restaurantId == resource.data.restaurantId
+          && request.resource.data.restaurantId == resource.data.restaurantId);
+      allow delete: if isSuperAdmin()
         || (signedIn()
           && role() == 'Admin'
           && request.auth.token.restaurantId == resource.data.restaurantId);
     }
 
     match /customers/{customerId} {
-      allow read, write: if ownsRestaurantData(resource.data);
+      allow read: if ownsRestaurantData(resource.data);
+      allow create: if isSuperAdmin()
+        || (signedIn()
+          && role() == 'Admin'
+          && request.auth.token.restaurantId == request.resource.data.restaurantId);
+      allow update: if ownsRestaurantData(resource.data)
+        && preservesTenant(resource.data, request.resource.data);
+      allow delete: if ownsRestaurantData(resource.data);
     }
 
     match /inventory/{inventoryId} {
-      allow read, write: if ownsRestaurantData(resource.data);
+      allow read: if ownsRestaurantData(resource.data);
+      allow create: if canManageRestaurant(request.resource.data.restaurantId);
+      allow update: if ownsRestaurantData(resource.data)
+        && preservesTenant(resource.data, request.resource.data);
+      allow delete: if ownsRestaurantData(resource.data);
     }
 
     match /recipes/{recipeId} {
-      allow read, write: if ownsRestaurantData(resource.data);
+      allow read: if ownsRestaurantData(resource.data);
+      allow create: if canManageRestaurant(request.resource.data.restaurantId);
+      allow update: if ownsRestaurantData(resource.data)
+        && preservesTenant(resource.data, request.resource.data);
+      allow delete: if ownsRestaurantData(resource.data);
     }
 
     match /reviews/{reviewId} {
       allow create: if request.resource.data.restaurantId is string;
-      allow read, update, delete: if ownsRestaurantData(resource.data);
+      allow read: if ownsRestaurantData(resource.data);
+      allow update: if ownsRestaurantData(resource.data)
+        && preservesTenant(resource.data, request.resource.data);
+      allow delete: if ownsRestaurantData(resource.data);
     }
 
     match /complaints/{complaintId} {
       allow create: if request.resource.data.restaurantId is string;
-      allow read, update, delete: if ownsRestaurantData(resource.data);
+      allow read: if ownsRestaurantData(resource.data);
+      allow update: if ownsRestaurantData(resource.data)
+        && preservesTenant(resource.data, request.resource.data);
+      allow delete: if ownsRestaurantData(resource.data);
     }
 
     match /waste_log/{entryId} {
-      allow read, write: if ownsRestaurantData(resource.data);
+      allow read: if ownsRestaurantData(resource.data);
+      allow create: if canManageRestaurant(request.resource.data.restaurantId);
+      allow update: if ownsRestaurantData(resource.data)
+        && preservesTenant(resource.data, request.resource.data);
+      allow delete: if ownsRestaurantData(resource.data);
     }
 
     match /wasteLog/{entryId} {
-      allow read, write: if ownsRestaurantData(resource.data);
+      allow read: if ownsRestaurantData(resource.data);
+      allow create: if canManageRestaurant(request.resource.data.restaurantId);
+      allow update: if ownsRestaurantData(resource.data)
+        && preservesTenant(resource.data, request.resource.data);
+      allow delete: if ownsRestaurantData(resource.data);
     }
 
     match /{document=**} {
