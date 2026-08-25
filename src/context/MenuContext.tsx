@@ -1,4 +1,4 @@
-import { createContext } from 'react';
+import { useMenu as useProviderMenu } from './MenuProvider';
 
 export interface LocalizedText {
   ar: string;
@@ -26,9 +26,27 @@ export interface MenuContextType {
   menuItems: MenuItem[];
   themeColor: string;
   currentTable: string;
+  setTable: (tableNum: string) => void;
   restaurantId: string;
-  setCurrentTable: (tableNum: string) => void;
 }
 
-// Shared domain contract retained for menu-related consumers.
-export const MenuContext = createContext<MenuContextType | undefined>(undefined);
+type ProviderMenuValue = {
+  menuItems: MenuItem[];
+  themeColor: string;
+  currentTable: string;
+  setCurrentTable: (tableNum: string) => void;
+  restaurantId: string;
+};
+
+// Expose the provider-backed menu contract to existing consumers without creating a second React context.
+export const useMenu = (): MenuContextType => {
+  const context = useProviderMenu() as ProviderMenuValue;
+
+  return {
+    menuItems: context.menuItems,
+    themeColor: context.themeColor,
+    currentTable: context.currentTable,
+    setTable: context.setCurrentTable,
+    restaurantId: context.restaurantId,
+  };
+};
