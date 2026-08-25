@@ -1,105 +1,200 @@
-import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Store, CreditCard, Settings, LogOut, TrendingUp, AlertCircle, CheckCircle, Trash2, Ban } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import {
+  AlertCircle,
+  Ban,
+  CheckCircle,
+  CreditCard,
+  LayoutDashboard,
+  LogOut,
+  Settings,
+  Store,
+  Trash2,
+  TrendingUp,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { adminTranslations } from '../../utils/translations/AdminTranslations';
 import { AddRestaurantModal } from './AddRestaurantModal';
-import { db } from '../../firebase';
-import { collection, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { auth, db } from '../../firebase';
 
 type Language = 'ar' | 'fr' | 'en';
+type DashboardTab = 'overview' | 'restaurants' | 'subscriptions' | 'settings';
+type RestaurantPlan = 'monthly' | 'quarterly' | 'yearly';
+type RestaurantStatus = 'active' | 'suspended';
+
+interface RestaurantRecord {
+  id: string;
+  name?: string;
+  owner?: string;
+  email?: string;
+  plan: RestaurantPlan | string;
+  status: string;
+  rawStatus: RestaurantStatus;
+}
+
+const SUPER_ADMIN_EMAIL = 'abdeldjalilkhalfa2@gmail.com';
 
 export const SuperAdminDashboard: React.FC = () => {
   const [lang, setLang] = useState<Language>('ar');
-  const [activeTab, setActiveTab] = useState<'overview' | 'restaurants' | 'subscriptions' | 'settings'>('overview');
-  
-  // حالات التحكم في مودال إضافة مطعم وقائمة المطاعم التفاعلية
+  const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [restaurantsList, setRestaurantsList] = useState<any[]>([]);
+  const [restaurantsList, setRestaurantsList] = useState<RestaurantRecord[]>([]);
   const [loading, setLoading] = useState(true);
-
+  const [authReady, setAuthReady] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
   const navigate = useNavigate();
 
-  // دالة لجلب المطاعم الحقيقية من Firestore
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      const isSuperAdmin = user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
+      setAuthorized(isSuperAdmin);
+      setAuthReady(true);
+
+      if (!isSuperAdmin) {
+        navigate('/login', { replace: true });
+      }
+    });
+
+    return unsubscribe;
+  }, [navigate]);
+
+  const isCurrentSuperAdmin = () =>
+    auth.currentUser?.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
+
   const fetchRestaurants = async () => {
+    if (!isCurrentSuperAdmin()) return;
+
+    setLoading(true);
     try {
       const querySnapshot = await getDocs(collection(db, 'restaurants'));
-      const list = querySnapshot.docs.map(docSnap => {
+      const list: RestaurantRecord[] = querySnapshot.docs.map((docSnap) => {
         const data = docSnap.data();
-        let planFormatted = data.plan;
+        let planFormatted = data.plan as string | undefined;
+
         if (data.plan === 'yearly') planFormatted = 'سنوي (1 Year)';
         else if (data.plan === 'quarterly') planFormatted = '3 أشهر (Quarterly)';
         else if (data.plan === 'monthly') planFormatted = 'شهري (Monthly)';
 
-        const statusValue = data.status === 'suspended' ? 'معطل (Suspended)' : 'نشط (Active)';
+        const rawStatus: RestaurantStatus =
+          data.status === 'suspended' ? 'suspended' : 'active';
 
         return {
           id: docSnap.id,
           name: data.name,
           owner: data.owner,
           email: data.email,
-          plan: planFormatted,
-          status: statusValue,
-          rawStatus: data.status || 'active'
+          plan: planFormatted || '',
+          status: rawStatus === 'suspended' ? 'معطل (Suspended)' : 'نشط (Active)',
+          rawStatus,
         };
       });
+
       setRestaurantsList(list);
-      setLoading(false);
     } catch (error) {
-      console.error("Error fetching restaurants: ", error);
+      console.error('Error fetching restaurants:', error);
+    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchRestaurants();
-  }, []);
+    if (authorized) {
+      void fetchRestaurants();
+    }
+  }, [authorized]);
 
-  // دالة إلغاء تفعيل / تعليق الاشتراك للمطعم
-  const handleToggleSuspend = async (restaurantId: string, currentRawStatus: string) => {
-    const newStatus = currentRawStatus === 'suspended' ? 'active' : 'suspended';
+  const handleToggleSuspend = async (
+    restaurantId: string,
+    currentRawStatus: RestaurantStatus
+  ) => {
+    if (!isCurrentSuperAdmin()) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    const newStatus: RestaurantStatus =
+      currentRawStatus === 'suspended' ? 'active' : 'suspended';
+
     try {
       await updateDoc(doc(db, 'restaurants', restaurantId), {
-        status: newStatus
+        status: newStatus,
       });
-      fetchRestaurants();
+      await fetchRestaurants();
     } catch (error) {
-      console.error("Error updating restaurant status:", error);
+      console.error('Error updating restaurant status:', error);
     }
   };
 
-  // دالة الحذف النهائي للمطعم من فايربيس
   const handleDeleteRestaurant = async (restaurantId: string) => {
-    if (window.confirm(adminTranslations[lang]?.confirmDelete || "هل أنت متكد من رغبتك في حذف هذا المطعم نهائياً؟")) {
+    if (!isCurrentSuperAdmin()) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    if (
+      window.confirm(
+        adminTranslations[lang]?.confirmDelete ||
+          'هل أنت متكد من رغبتك في حذف هذا المطعم نهائياً؟'
+      )
+    ) {
       try {
         await deleteDoc(doc(db, 'restaurants', restaurantId));
-        fetchRestaurants();
+        await fetchRestaurants();
       } catch (error) {
-        console.error("Error deleting restaurant:", error);
+        console.error('Error deleting restaurant:', error);
       }
     }
   };
 
-  // بيانات توضيحية للإحصائيات مرتبطة بعدد المطاعم الحقيقي
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } finally {
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('userId');
+      localStorage.removeItem('userName');
+      navigate('/login', { replace: true });
+    }
+  };
+
+  if (!authReady || (auth.currentUser && !authorized)) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+      </div>
+    );
+  }
+
+  if (!authorized) return null;
+
   const stats = {
     totalRestaurants: restaurantsList.length,
-    activeSubscriptions: restaurantsList.filter(r => r.rawStatus !== 'suspended').length,
+    activeSubscriptions: restaurantsList.filter((r) => r.rawStatus !== 'suspended').length,
     pendingRenewals: 2,
-    totalRevenue:` ${restaurantsList.length * 15000} DZD`
+    totalRevenue: ` ${restaurantsList.length * 15000} DZD`,
   };
 
   const t = adminTranslations[lang];
+  const navigationItems: Array<{
+    id: DashboardTab;
+    icon: typeof LayoutDashboard;
+    label: string;
+  }> = [
+    { id: 'overview', icon: LayoutDashboard, label: t.overview },
+    { id: 'restaurants', icon: Store, label: t.restaurants },
+    { id: 'subscriptions', icon: CreditCard, label: t.subscriptions },
+    { id: 'settings', icon: Settings, label: t.settings },
+  ];
 
-  // دالة إضافة مطعم جديد وإضافته للقائمة وتحديث الفايربيس
   const handleAddRestaurant = () => {
-    fetchRestaurants(); // إعادة جلب البيانات لتحديث القائمة فوراً
+    void fetchRestaurants();
   };
-      return (
+
+  return (
     <div className="min-h-screen bg-slate-100 flex" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      
-      {/* 1. الشريط الجانبي (Sidebar) */}
       <aside className="w-64 bg-slate-900 text-slate-300 flex-col justify-between p-6 shadow-xl hidden md:flex">
         <div className="space-y-8">
-          {/* شعار المنصة */}
           <div className="flex items-center gap-3">
             <div className="bg-amber-500 text-slate-950 p-2 rounded-xl font-bold text-xl">MF</div>
             <div>
@@ -108,19 +203,15 @@ export const SuperAdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* روابط القائمة */}
           <nav className="space-y-2">
-            {[
-              { id: 'overview', icon: LayoutDashboard, label: t.overview },
-              { id: 'restaurants', icon: Store, label: t.restaurants },
-              { id: 'subscriptions', icon: CreditCard, label: t.subscriptions },
-              { id: 'settings', icon: Settings, label: t.settings },
-            ].map((item) => (
+            {navigationItems.map((item) => (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id as any)}
+                onClick={() => setActiveTab(item.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition ${
-                  activeTab === item.id ? 'bg-amber-500 text-slate-950 font-bold shadow-md' : 'hover:bg-slate-800 text-slate-400 hover:text-white'
+                  activeTab === item.id
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-md'
+                    : 'hover:bg-slate-800 text-slate-400 hover:text-white'
                 }`}
               >
                 <item.icon size={18} />
@@ -130,9 +221,8 @@ export const SuperAdminDashboard: React.FC = () => {
           </nav>
         </div>
 
-        {/* زر تسجيل الخروج */}
         <button
-          onClick={() => navigate('/login')}
+          onClick={handleLogout}
           className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition"
         >
           <LogOut size={18} />
@@ -140,17 +230,13 @@ export const SuperAdminDashboard: React.FC = () => {
         </button>
       </aside>
 
-      {/* 2. المحتوى الرئيسي (Main Content Area) */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        
-        {/* هيدر الداشبورد العلوي */}
         <header className="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center shadow-sm">
           <div>
             <h1 className="text-xl font-bold text-slate-800">{t.dashboardTitle}</h1>
             <p className="text-xs text-slate-500 mt-0.5">{t.welcome}</p>
           </div>
 
-          {/* تبديل اللغات السريع للمنصة */}
           <div className="flex items-center gap-3">
             <select
               value={lang}
@@ -164,33 +250,24 @@ export const SuperAdminDashboard: React.FC = () => {
           </div>
         </header>
 
-        {/* محتوى التبويبات المتغيرة */}
         <div className="p-8 space-y-8">
-          
-          {/* تبويب النظرة العامة (Overview) */}
           {activeTab === 'overview' && (
             <div className="space-y-8 animate-fadeIn">
-              
-              {/* بطاقات الإحصاء السريع */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                   <div>
                     <p className="text-xs font-semibold text-slate-400">{t.totalRest}</p>
                     <p className="text-3xl font-extrabold text-slate-800 mt-2">{stats.totalRestaurants}</p>
                   </div>
-                  <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl">
-                    <Store size={24} />
-                  </div>
+                  <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl"><Store size={24} /></div>
                 </div>
-                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                   <div>
                     <p className="text-xs font-semibold text-slate-400">{t.activeSub}</p>
                     <p className="text-3xl font-extrabold text-green-600 mt-2">{stats.activeSubscriptions}</p>
                   </div>
-                  <div className="p-4 bg-green-50 text-green-600 rounded-2xl">
-                    <CheckCircle size={24} />
-                  </div>
+                  <div className="p-4 bg-green-50 text-green-600 rounded-2xl"><CheckCircle size={24} /></div>
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
@@ -198,9 +275,7 @@ export const SuperAdminDashboard: React.FC = () => {
                     <p className="text-xs font-semibold text-slate-400">{t.pendingSub}</p>
                     <p className="text-3xl font-extrabold text-amber-600 mt-2">{stats.pendingRenewals}</p>
                   </div>
-                  <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl">
-                    <AlertCircle size={24} />
-                  </div>
+                  <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl"><AlertCircle size={24} /></div>
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
@@ -208,14 +283,10 @@ export const SuperAdminDashboard: React.FC = () => {
                     <p className="text-xs font-semibold text-slate-400">{t.revenue}</p>
                     <p className="text-2xl font-extrabold text-slate-900 mt-2">{stats.totalRevenue}</p>
                   </div>
-                  <div className="p-4 bg-purple-50 text-purple-600 rounded-2xl">
-                    <TrendingUp size={24} />
-                  </div>
+                  <div className="p-4 bg-purple-50 text-purple-600 rounded-2xl"><TrendingUp size={24} /></div>
                 </div>
-
               </div>
 
-              {/* قسم سريع لعرض أحدث المطاعم واختصار الأكشن */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
                 <div className="flex justify-between items-center">
                   <h3 className="font-bold text-slate-800 text-lg">{t.recentActivity}</h3>
@@ -227,7 +298,6 @@ export const SuperAdminDashboard: React.FC = () => {
                   </button>
                 </div>
 
-                {/* جدول مصغر لأحدث المطاعم */}
                 <div className="overflow-x-auto">
                   <table className={`w-full border-collapse ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
                     <thead>
@@ -248,14 +318,8 @@ export const SuperAdminDashboard: React.FC = () => {
                           <tr key={rest.id}>
                             <td className="py-3 font-bold text-slate-800">{rest.name}</td>
                             <td className="py-3 text-slate-500">{rest.owner}</td>
-                            <td className="py-3">
-                              <span className="bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-md text-xs font-semibold">{rest.plan}</span>
-                            </td>
-                            <td className="py-3">
-                              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${rest.rawStatus === 'suspended' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
-                                {rest.status}
-                              </span>
-                            </td>
+                            <td className="py-3"><span className="bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-md text-xs font-semibold">{rest.plan}</span></td>
+                            <td className="py-3"><span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${rest.rawStatus === 'suspended' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>{rest.status}</span></td>
                           </tr>
                         ))
                       )}
@@ -263,11 +327,9 @@ export const SuperAdminDashboard: React.FC = () => {
                   </table>
                 </div>
               </div>
-
             </div>
           )}
 
-          {/* تبويب إدارة المطاعم (Restaurants) - عرض الجدول الحقيقي مع أزرار التعليق والحذف */}
           {activeTab === 'restaurants' && (
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
               <div className="flex justify-between items-center">
@@ -283,7 +345,6 @@ export const SuperAdminDashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* جدول المطاعم الكامل */}
               <div className="overflow-x-auto pt-2">
                 <table className={`w-full border-collapse ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
                   <thead>
@@ -307,25 +368,17 @@ export const SuperAdminDashboard: React.FC = () => {
                           <td className="py-3.5 font-bold text-slate-800">{rest.name}</td>
                           <td className="py-3.5 text-slate-600">{rest.owner}</td>
                           <td className="py-3.5 text-slate-500" dir="ltr">{rest.email}</td>
-                          <td className="py-3.5">
-                            <span className="bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-md text-xs font-semibold">{rest.plan}</span>
-                          </td>
-                          <td className="py-3.5">
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${rest.rawStatus === 'suspended' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
-                              {rest.status}
-                            </span>
-                          </td>
+                          <td className="py-3.5"><span className="bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-md text-xs font-semibold">{rest.plan}</span></td>
+                          <td className="py-3.5"><span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${rest.rawStatus === 'suspended' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>{rest.status}</span></td>
                           <td className="py-3.5 text-center">
                             <div className="flex items-center justify-center gap-2">
-                              {/* زر تعليق أو تفعيل الاشتراك */}
                               <button
-                           onClick={() => handleToggleSuspend(rest.id, rest.rawStatus)}
+                                onClick={() => handleToggleSuspend(rest.id, rest.rawStatus)}
                                 title={rest.rawStatus === 'suspended' ? 'تفعيل الاشتراك' : 'إلغاء التفعيل/التعليق'}
                                 className={`p-2 rounded-xl transition ${rest.rawStatus === 'suspended' ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
                               >
                                 <Ban size={16} />
                               </button>
-                              {/* زر الحذف النهائي من Firebase */}
                               <button
                                 onClick={() => handleDeleteRestaurant(rest.id)}
                                 title="حذف نهائي من قاعدة البيانات"
@@ -344,7 +397,6 @@ export const SuperAdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* تبويب الاشتراكات (Subscriptions) */}
           {activeTab === 'subscriptions' && (
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
               <h2 className="text-xl font-bold text-slate-800">{t.subscriptions}</h2>
@@ -352,25 +404,21 @@ export const SuperAdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* تبويب الإعدادات (Settings) */}
           {activeTab === 'settings' && (
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
               <h2 className="text-xl font-bold text-slate-800">{t.settings}</h2>
               <p className="text-sm text-slate-500">{t.settingsDesc}</p>
             </div>
           )}
-
         </div>
       </main>
 
-      {/* نافذة إضافة مطعم منبثقة (Modal) */}
       <AddRestaurantModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onAdd={handleAddRestaurant}
         lang={lang}
       />
-
     </div>
   );
 };
