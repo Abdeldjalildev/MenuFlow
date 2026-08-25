@@ -1,6 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { useMenu } from './MenuContext';
 import {
   collection,
   onSnapshot,
@@ -178,9 +177,10 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [orders, setOrders] = useState<Order[]>([]);
-  const { restaurantId } = useMenu();
 
-  // Current restaurant identifier is sourced from the shared menu context.
+  // Current restaurant identifier (fallback for legacy calls without explicit override)
+  const restaurantId = localStorage.getItem('restaurantId') || 'default_restaurant';
+
   useEffect(() => {
     const q = query(
       collection(db, 'orders'),
@@ -495,48 +495,129 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({
         const currentOrder = orders.find((o) => o.id === orderId);
         if (!currentOrder) return;
 
-        const firestoreModule = await import('firebase/firestore');
-        const customerId = currentOrder.customerId;
-
-        if (customerId) {
-          const customerRef = doc(db, 'customers', customerId);
-          const customerSnap = await firestoreModule.getDoc(customerRef);
+        if (currentOrder.customerId) {
+          const customerRef = doc(db, 'customers', currentOrder.customerId);
+          const customerSnap = await getDoc(customerRef);
+          const paidAmount = Number(
+            currentOrder.totalAmount || currentOrder.totalPrice || 0
+          );
+          const earnedPoints = Math.floor(paidAmount / 100);
 
           if (customerSnap.exists()) {
-            const customerData = customerSnap.data();
-            const currentPoints = Number(customerData.points || 0);
-            const earnedPoints = Math.floor(
-              Number(currentOrder.totalAmount || currentOrder.totalPrice || 0) / 100
-            );
-
+            const currentPoints = Number(customerSnap.data().points || 0);
             await updateDoc(customerRef, {
-              points: currentPoints + earnedPoints,
               activeDiscount: 0,
-              updatedAt: firestoreModule.serverTimestamp(),
+              points: currentPoints + earnedPoints,
+              updatedAt: serverTimestamp(),
+            });
+          } else {
+            const firestoreModule = await import('firebase/firestore');
+            await firestoreModule.setDoc(customerRef, {
+              restaurantId,
+              customerId: currentOrder.customerId,
+              points: earnedPoints,
+              activeDiscount: 0,
+              createdAt: serverTimestamp(),
             });
           }
         }
 
-        if (newStatus === 'completed') {
-          const wasteRef = collection(db, 'wasteLog');
-          await addDoc(wasteRef, {
-            restaurantId,
-            orderId,
-            createdAt: firestoreModule.serverTimestamp(),
-            reason: 'order_completed',
+        if (currentOrder.items && Array.isArray(currentOrder.items)) {
+          const firestoreModule = await import('firebase/firestore');
+          const recipesQuery = firestoreModule.query(
+            firestoreModule.collection(db, 'recipes'),
+            firestoreModule.where('restaurantId', '==', restaurantId)
+          );
+          const recipesSnapshot = await firestoreModule.getDocs(recipesQuery);
+
+          const recipesList: Recipe[] = recipesSnapshot.docs.map((docSnap) => ({
+            id: docSnap.id,
+            menuItemId: docSnap.data().menuItemId,
+            nameAr: docSnap.data().nameAr,
+            cost: Number(docSnap.data().cost || 0),
+          }));
+
+          let totalOrderCost = 0;
+          currentOrder.items.forEach((item) => {
+            const matchedRecipe = recipesList.find(
+              (r) =>
+                (item.recipeId && r.id === item.recipeId) ||
+                (item.menuItemId && r.menuItemId === item.menuItemId) ||
+                r.nameAr ===
+                  (typeof item.name === 'string' ? item.name : item.name?.ar) ||
+                r.nameAr === item.nameAr
+            );
+
+            const recipeCost = matchedRecipe ? matchedRecipe.cost : 0;
+            const quantity = Number(item?.quantity || item?.qty || 1);
+            totalOrderCost += (recipeCost || 0) * quantity;
           });
+
+          if (totalOrderCost > 0) {
+            const wasteLogRef = collection(db, 'waste_log');
+            await addDoc(wasteLogRef, {
+              restaurantId,
+              orderId,
+              estimatedLoss: totalOrderCost,
+              reason: 'Automatic consumption via sales',
+              createdAt: new Date(),
+            });
+          }
         }
       } catch (error) {
-        console.error('Error processing payment completion side effects:', error);
+        console.error('Error processing payment and loyalty system:', error);
       }
     }
   };
 
-  const addReview = async (orderId: string, rating: number, comment: string) => {
+  // -------------------------------------------------------------------------
+  // addReview
+  // -------------------------------------------------------------------------
+  const addReview = async (
+    orderId: string,
+    rating: number,
+    comment: string
+  ) => {
+    const orderRef = doc(db, 'orders', orderId);
+    await updateDoc(orderRef, { rating, comment });
+
+    const currentOrder = orders.find((o) => o.id === orderId);
+
     try {
-      await updateDoc(doc(db, 'orders', orderId), { rating, comment });
+      const reviewsRef = collection(db, 'reviews');
+      await addDoc(reviewsRef, {
+        restaurantId,
+        orderId,
+        rating,
+        comment,
+        createdAt: new Date(),
+      });
+
+      const complaintsRef = collection(db, 'complaints');
+      await addDoc(complaintsRef, {
+        restaurantId,
+        orderId,
+        customerName:
+          (typeof currentOrder?.customerName === 'string'
+            ? currentOrder.customerName
+            : undefined) || 'Customer',
+        customerPhone:
+          currentOrder?.customerPhone ||
+          currentOrder?.deliveryData?.phone ||
+          '',
+        tableNumber: currentOrder?.tableNumber || '0',
+        message:
+          comment ||
+          (rating >= 4
+            ? 'Positive feedback without comment'
+            : 'Note/complaint without comment'),
+        rating,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        createdAtRaw: Date.now(),
+      });
     } catch (error) {
-      console.error('Error adding review:', error);
+      console.error('Error syncing review to reports and complaints:', error);
     }
   };
 
