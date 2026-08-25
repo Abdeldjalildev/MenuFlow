@@ -1,19 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
 
+type StaffRole = 'SuperAdmin' | 'Admin' | 'Cashier' | 'Kitchen' | 'Delivery';
+
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: ('SuperAdmin' | 'Admin' | 'Cashier' | 'Kitchen' | 'Delivery')[];
+  allowedRoles?: StaffRole[];
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const userRole = localStorage.getItem('userRole');
+  const storedRole = localStorage.getItem('userRole');
+  const userRole: StaffRole | null =
+    storedRole && ['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery'].includes(storedRole)
+      ? (storedRole as StaffRole)
+      : null;
   const location = useLocation();
 
-  // Verify the Firebase Auth session is active before trusting the local role
+  // Verify the Firebase Auth session is active before trusting the local role.
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setIsAuthenticated(!!user);
@@ -21,7 +27,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     return () => unsubscribe();
   }, []);
 
-  // Block rendering while auth state is still being determined
+  // Block rendering while auth state is still being determined.
   if (isAuthenticated === null) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -30,18 +36,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     );
   }
 
-  // No valid Firebase session: force re-authentication
+  // No valid Firebase session: force re-authentication.
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Authenticated but role is missing from localStorage: force re-login
+  // Authenticated but role is missing or invalid in localStorage: force re-login.
   if (!userRole) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Authenticated with valid session but wrong role for this route
-  if (allowedRoles && !allowedRoles.includes(userRole as any)) {
+  // Authenticated with a valid session but wrong role for this route.
+  if (allowedRoles && !allowedRoles.includes(userRole)) {
     if (userRole === 'SuperAdmin') return <Navigate to="/super-admin" replace />;
     return <Navigate to="/merchant/overview" replace />;
   }
