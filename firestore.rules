@@ -1,0 +1,103 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return signedIn() ? request.auth.token.role : null;
+    }
+
+    function hasRole(requiredRole) {
+      return signedIn() && role() == requiredRole;
+    }
+
+    function isSuperAdmin() {
+      return hasRole('SuperAdmin');
+    }
+
+    function isRestaurantStaff(restaurantId) {
+      return signedIn()
+        && role() in ['Admin', 'Cashier', 'Kitchen', 'Delivery']
+        && request.auth.token.restaurantId == restaurantId;
+    }
+
+    function canManageRestaurant(restaurantId) {
+      return isSuperAdmin() || isRestaurantStaff(restaurantId);
+    }
+
+    function ownsRestaurantData(data) {
+      return data.restaurantId is string && canManageRestaurant(data.restaurantId);
+    }
+
+    // Public menu reads are required by the customer-facing QR menu.
+    match /restaurants/{restaurantId}/menuItems/{menuItemId} {
+      allow read: if true;
+      allow write: if canManageRestaurant(restaurantId);
+    }
+
+    match /restaurants/{restaurantId}/settings/{settingId} {
+      allow read: if settingId == 'theme';
+      allow write: if canManageRestaurant(restaurantId);
+    }
+
+    // Restaurant documents are public-read only when the customer menu needs them.
+    // Administrative writes remain restricted to the SuperAdmin boundary.
+    match /restaurants/{restaurantId} {
+      allow read: if true;
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /orders/{orderId} {
+      // Customer order creation is intentionally left open until customer identity
+      // is migrated from localStorage IDs to Firebase Auth/anonymous Auth.
+      allow create: if request.resource.data.restaurantId is string;
+      allow read, update, delete: if ownsRestaurantData(resource.data);
+    }
+
+    match /staff/{staffId} {
+      allow read: if isSuperAdmin()
+        || (signedIn() && request.auth.token.restaurantId == resource.data.restaurantId);
+      allow create, update, delete: if isSuperAdmin()
+        || (signedIn()
+          && role() == 'Admin'
+          && request.auth.token.restaurantId == resource.data.restaurantId);
+    }
+
+    match /customers/{customerId} {
+      allow read, write: if ownsRestaurantData(resource.data);
+    }
+
+    match /inventory/{inventoryId} {
+      allow read, write: if ownsRestaurantData(resource.data);
+    }
+
+    match /recipes/{recipeId} {
+      allow read, write: if ownsRestaurantData(resource.data);
+    }
+
+    match /reviews/{reviewId} {
+      allow create: if request.resource.data.restaurantId is string;
+      allow read, update, delete: if ownsRestaurantData(resource.data);
+    }
+
+    match /complaints/{complaintId} {
+      allow create: if request.resource.data.restaurantId is string;
+      allow read, update, delete: if ownsRestaurantData(resource.data);
+    }
+
+    match /waste_log/{entryId} {
+      allow read, write: if ownsRestaurantData(resource.data);
+    }
+
+    match /wasteLog/{entryId} {
+      allow read, write: if ownsRestaurantData(resource.data);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
