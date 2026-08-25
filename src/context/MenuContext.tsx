@@ -1,31 +1,43 @@
 import { createContext, useContext } from 'react';
 
-// نقلنا التعريف هنا لإنهاء الخطأ
+export interface LocalizedText {
+  ar: string;
+  en: string;
+  fr: string;
+}
+
 export interface MenuItem {
   id: string;
-  name: { ar: string; en: string; fr: string };
-  description: { ar: string; en: string; fr: string };
+  _id?: string;
+  name: LocalizedText;
+  description?: LocalizedText;
   price: number;
-  image: string;
+  image?: string;
   category: string;
-  attributes: { isVegetarian: boolean; isSpicy: boolean; isGlutenFree: boolean; };
+  recipeId?: string | null;
+  attributes?: {
+    isVegetarian?: boolean;
+    isSpicy?: boolean;
+    isGlutenFree?: boolean;
+  };
 }
 
 export interface MenuContextType {
   menuItems: MenuItem[];
   themeColor: string;
   setThemeColor: (color: string) => void;
-  currentTable: string | null;
+  currentTable: string;
   setTable: (tableNum: string) => void;
-  restaurantId: string;          
-  setRestaurantId: (id: string) => void; 
+  restaurantId: string;
+  setRestaurantId: (id: string) => void;
 }
 
 export const MenuContext = createContext<MenuContextType | undefined>(undefined);
 
-// إضافة هذا الـ Hook يسهل عليك الاستدعاء في كل الملفات
-export const useMenu = () => {
+export const useMenu = (): MenuContextType => {
   const context = useContext(MenuContext);
-  if (!context) throw new Error("useMenu must be used within a MenuProvider");
+  if (!context) {
+    throw new Error('useMenu must be used within a MenuProvider');
+  }
   return context;
 };
