@@ -1,8 +1,20 @@
-export const getAIResponse = async (userPrompt: string, menuItems: any) => {
-  // استدعاء المفتاح بالطريقة الصحيحة الخاصة بـ Vite
-  const apiKey = import.meta.env.VITE_API_KEY; 
+import type { MenuItem } from '../context/MenuContext';
+
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ text?: string }>;
+    };
+  }>;
+  error?: {
+    message?: string;
+  };
+}
+
+export const getAIResponse = async (userPrompt: string, menuItems: MenuItem[]): Promise<string> => {
+  const apiKey = import.meta.env.VITE_API_KEY;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
-  
+
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -16,16 +28,21 @@ export const getAIResponse = async (userPrompt: string, menuItems: any) => {
       })
     });
 
+    const data: GeminiResponse = await response.json();
+
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error("خطأ من جوجل:", errorData);
-      throw new Error(`خطأ ${response.status}: ${errorData.error.message}`);
+      console.error('خطأ من جوجل:', data);
+      throw new Error(`خطأ ${response.status}: ${data.error?.message || 'Unknown API error'}`);
     }
 
-    const data = await response.json();
-    return data.candidates[0].content.parts[0].text;
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      throw new Error('Gemini returned an empty response');
+    }
+
+    return text;
   } catch (error) {
-    console.error("فشل الاتصال:", error);
-    return "عذراً، تعذر الوصول للمساعد الذكي حالياً.";
+    console.error('فشل الاتصال:', error);
+    return 'عذراً، تعذر الوصول للمساعد الذكي حالياً.';
   }
 };
