@@ -70,7 +70,12 @@ export const AddRestaurantModal: React.FC<AddRestaurantModalProps> = ({
         createdAt: serverTimestamp(),
       });
 
-      const { password: _password, ...safeRestaurantData } = formData;
+      const safeRestaurantData: Omit<RestaurantFormData, 'password'> = {
+        name: formData.name,
+        owner: formData.owner,
+        email: formData.email,
+        plan: formData.plan,
+      };
       onAdd(safeRestaurantData);
       setFormData({ name: '', owner: '', email: '', password: '', plan: 'monthly' });
       onClose();
