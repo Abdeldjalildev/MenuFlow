@@ -1,7 +1,14 @@
 import React, { useState, useContext } from 'react';
-import { OrderContext } from '../../context/OrderProvider';
+import { OrderContext, type Order } from '../../context/OrderProvider';
 import { OrderStatus } from './orderStatus';
 import { useMenu } from '../../context/MenuContext';
+
+const toDate = (value: Order['createdAt']): Date => {
+  if (value && typeof value === 'object' && 'toDate' in value) {
+    return value.toDate();
+  }
+  return new Date(value ?? 0);
+};
 
 export const OrderTracking: React.FC<{ t: (key: string) => string }> = ({ t }) => {
   const { orders, updateOrderStatus, addReview } = useContext(OrderContext);
@@ -11,19 +18,16 @@ export const OrderTracking: React.FC<{ t: (key: string) => string }> = ({ t }) =
 
   // Isolate the order to this specific customer and table, excluding finished orders
   const currentOrder = orders
-    .filter((o: any) => 
-      o.tableNumber === currentTable && 
-      o.status !== 'TrackDone' &&
-      (!customerId || o.customerId === customerId)
+    .filter(
+      (order) =>
+        order.tableNumber === currentTable &&
+        order.status !== 'TrackDone' &&
+        (!customerId || order.customerId === customerId)
     )
-    .sort((a: any, b: any) => {
-      const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
-      const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
-      return dateB.getTime() - dateA.getTime();
-    })[0];
+    .sort((a, b) => toDate(b.createdAt).getTime() - toDate(a.createdAt).getTime())[0];
 
   const [rating, setRating] = useState(0);
-  const [reviewText, setReviewText] = useState("");
+  const [reviewText, setReviewText] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
   if (!currentOrder) return null;
@@ -32,7 +36,7 @@ export const OrderTracking: React.FC<{ t: (key: string) => string }> = ({ t }) =
     try {
       await updateOrderStatus(currentOrder.id, 'TrackDone');
     } catch (error) {
-      console.error("Error finishing order:", error);
+      console.error('Error finishing order:', error);
     }
   };
 
@@ -40,9 +44,9 @@ export const OrderTracking: React.FC<{ t: (key: string) => string }> = ({ t }) =
     <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm mt-4">
       <h2 className="text-center font-bold mb-4 text-slate-800 dark:text-white">{t('currentOrderStatus')}</h2>
       
-      <OrderStatus 
-        status={currentOrder.status} 
-        t={t} 
+      <OrderStatus
+        status={currentOrder.status}
+        t={t}
         isRated={submitted}
       />
 
@@ -52,30 +56,30 @@ export const OrderTracking: React.FC<{ t: (key: string) => string }> = ({ t }) =
           <h3 className="text-center font-bold mb-4 text-slate-800 dark:text-white">{t('howWasExperience')}</h3>
           <div className="flex justify-center gap-2 mb-4">
             {[1, 2, 3, 4, 5].map((star) => (
-              <button 
-                key={star} 
-                onClick={() => setRating(star)} 
+              <button
+                key={star}
+                onClick={() => setRating(star)}
                 className={`text-2xl transition-transform ${rating >= star ? 'scale-125' : 'opacity-40'}`}
               >
                 ⭐️
               </button>
             ))}
           </div>
-          <textarea 
+          <textarea
             placeholder={t('yourFeedback')}
-            className="w-full p-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-xl mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-            onChange={(e) => setReviewText(e.target.value)} 
+            className="w-full p-3 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-xl mb-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            onChange={(e) => setReviewText(e.target.value)}
           />
-          <button 
-            onClick={async () => { 
-              if (rating > 0 && currentOrder) {
+          <button
+            onClick={async () => {
+              if (rating > 0) {
                 await addReview(currentOrder.id, rating, reviewText);
               }
               setSubmitted(true);
               setTimeout(async () => {
                 await handleFinishOrder();
               }, 2000);
-            }} 
+            }}
             className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-md active:scale-95 text-sm cursor-pointer"
           >
             {t('sendReview')}
