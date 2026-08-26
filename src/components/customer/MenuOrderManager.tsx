@@ -1,34 +1,33 @@
 import React, { useRef, useEffect } from 'react';
 import { DeliveryForm } from './DeliveryuForm';
 import { OrderTracking } from './OrderTracking';
+import type { Order } from '../../context/OrderProvider';
 
 interface Props {
   showDeliveryForm: boolean;
   isOrderPlaced: boolean;
-  currentOrder: any;
+  currentOrder: Order | null;
   onDeliveryConfirm: (name: string, address: string, phone: string) => void;
   t: (key: string) => string;
   themeColor: string;
 }
 
-export const MenuOrOrderManager: React.FC<Props> = ({ 
-  showDeliveryForm, 
-  isOrderPlaced, 
-  currentOrder, 
-  onDeliveryConfirm, 
-  t, 
-  themeColor 
+export const MenuOrOrderManager: React.FC<Props> = ({
+  showDeliveryForm,
+  isOrderPlaced,
+  currentOrder,
+  onDeliveryConfirm,
+  t,
+  themeColor,
 }) => {
   const trackingRef = useRef<HTMLDivElement>(null);
 
-  // منطق التنقل السلس (لم يتغير إطلاقاً)
   useEffect(() => {
     if ((showDeliveryForm || isOrderPlaced) && trackingRef.current) {
       trackingRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [showDeliveryForm, isOrderPlaced]);
 
-  // إذا لم نكن في مرحلة التوصيل ولم يتم وضع طلب، لا نعرض شيئاً
   if (!showDeliveryForm && !currentOrder && !isOrderPlaced) return null;
 
   return (
