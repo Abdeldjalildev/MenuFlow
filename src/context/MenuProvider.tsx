@@ -1,22 +1,8 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { MenuContext } from './MenuContext';
 import type { MenuItem } from './MenuContext';
-
-interface MenuProviderValue {
-  menuItems: MenuItem[];
-  themeColor: string;
-  currentTable: string;
-  setCurrentTable: (tableNum: string) => void;
-  restaurantId: string;
-}
-
-export const MenuContext = createContext<MenuProviderValue | null>(null);
-export const useMenu = (): MenuProviderValue => {
-  const context = useContext(MenuContext);
-  if (!context) throw new Error('useMenu must be used within MenuProvider');
-  return context;
-};
 
 const getInitialRestaurantId = (): string => new URLSearchParams(window.location.search).get('restaurantId') || localStorage.getItem('restaurantId') || 'default_restaurant';
 const getInitialTable = (): string => new URLSearchParams(window.location.search).get('table') || localStorage.getItem('currentTable') || '0';
@@ -49,7 +35,9 @@ export const MenuProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const data = themeDoc.data() as { primaryColor?: string };
           setThemeColor(data.primaryColor || '#4f46e5');
         }
-      } catch (error) { console.error('Error fetching theme:', error); }
+      } catch (error: unknown) {
+        console.error('Error fetching theme:', error);
+      }
     };
     void fetchTheme();
 
@@ -61,5 +49,17 @@ export const MenuProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, [restaurantId]);
 
-  return <MenuContext.Provider value={{ menuItems, themeColor, currentTable, setCurrentTable, restaurantId }}>{children}</MenuContext.Provider>;
+  return (
+    <MenuContext.Provider
+      value={{
+        menuItems,
+        themeColor,
+        currentTable,
+        setTable: setCurrentTable,
+        restaurantId,
+      }}
+    >
+      {children}
+    </MenuContext.Provider>
+  );
 };
