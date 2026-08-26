@@ -9,6 +9,7 @@ import {
   updateDoc,
   doc,
   getDoc,
+  runTransaction,
   serverTimestamp,
   where,
 } from 'firebase/firestore';
@@ -266,34 +267,41 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({
   ): Promise<{ success: boolean; message?: string; error?: unknown }> => {
     try {
       const orderRef = doc(db, 'orders', orderId);
-      const orderSnap = await getDoc(orderRef);
 
-      if (!orderSnap.exists()) {
-        return { success: false, message: 'Order not found' };
-      }
+      const result = await runTransaction(db, async (transaction) => {
+        const orderSnap = await transaction.get(orderRef);
 
-      const orderData = orderSnap.data() as Order;
+        if (!orderSnap.exists()) {
+          return { success: false, message: 'Order not found' };
+        }
 
-      if (
-        orderData.isClaimed &&
-        orderData.driverId &&
-        orderData.driverId !== driverId
-      ) {
-        return {
-          success: false,
-          message: 'Order already claimed by another driver',
-        };
-      }
+        const orderData = orderSnap.data() as Order;
 
-      await updateDoc(orderRef, {
-        isClaimed: true,
-        driverId,
-        driverName,
-        status:
-          orderData.status === 'preparing' ? 'driver_claimed' : orderData.status,
+        if (
+          orderData.isClaimed &&
+          orderData.driverId &&
+          orderData.driverId !== driverId
+        ) {
+          return {
+            success: false,
+            message: 'Order already claimed by another driver',
+          };
+        }
+
+        transaction.update(orderRef, {
+          isClaimed: true,
+          driverId,
+          driverName,
+          status:
+            orderData.status === 'preparing'
+              ? 'driver_claimed'
+              : orderData.status,
+        });
+
+        return { success: true };
       });
 
-      return { success: true };
+      return result;
     } catch (error) {
       console.error('Error claiming order for driver:', error);
       return { success: false, error };

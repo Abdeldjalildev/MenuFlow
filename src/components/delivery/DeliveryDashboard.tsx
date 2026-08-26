@@ -3,37 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import { deliveryTranslations } from '../../utils/translations/deliveryTranslations';
 import { claimOrderForDriver } from './driverService';
 import { OrderContext } from '../../context/OrderProvider';
+import type {
+  Order,
+  OrderItem,
+} from '../../context/OrderProvider';
 
 type Language = 'ar' | 'fr' | 'en';
-
-interface OrderItem {
-  name?: string | Record<Language, string> | unknown;
-  nameAr?: string;
-  quantity: number;
-  note?: string;
-  price?: number;
-}
-
-interface Order {
-  id: string;
-  restaurantId?: string;
-  tableNumber?: string;
-  customerName?: string | Record<Language, string> | unknown;
-  customerPhone?: string;
-  deliveryAddress?: string | Record<Language, string> | unknown;
-  deliveryData?: {
-    name?: string | Record<Language, string> | unknown;
-    address?: string | Record<Language, string> | unknown;
-    phone?: string;
-  };
-  items: OrderItem[];
-  totalPrice?: number;
-  totalAmount?: number;
-  status: string;
-  isClaimed?: boolean;
-  driverId?: string;
-  driverName?: string;
-}
 
 // Strict lifecycle statuses visible to delivery personnel.
 const DELIVERY_STATUSES = [
@@ -56,6 +31,7 @@ export default function DeliveryDashboard() {
     localStorage.getItem('driverId') ||
     localStorage.getItem('userId') ||
     'driver_local_id';
+
   const currentDriverName =
     localStorage.getItem('userName') ||
     localStorage.getItem('driverName') ||
@@ -75,19 +51,23 @@ export default function DeliveryDashboard() {
   // Safely resolve multilingual or nested text fields.
   const safeText = (field: unknown, fallback: string = '') => {
     if (field === null || field === undefined) return fallback;
-    if (typeof field === 'string' || typeof field === 'number')
+
+    if (typeof field === 'string' || typeof field === 'number') {
       return String(field);
+    }
+
     if (typeof field === 'object' && field !== null) {
       const record = field as Record<string, string>;
       return record[lang] || record.ar || record.fr || record.en || fallback;
     }
+
     return fallback;
   };
 
   const currentRestaurantId = getRestaurantId();
 
   // Derive delivery orders from centralized context with strict, unambiguous filters.
-  const deliveryOrders: Order[] = orders.filter((o: Order) => {
+  const deliveryOrders: Order[] = orders.filter((o) => {
     // Restaurant isolation gate.
     if (o.restaurantId !== currentRestaurantId) return false;
 

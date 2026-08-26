@@ -2,35 +2,9 @@ import { useState, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { cashierTranslations } from '../../utils/translations/cashierTranslations';
 import { OrderContext } from '../../context/OrderProvider';
+import type { Order } from '../../context/OrderProvider';
 
 type Language = 'ar' | 'fr' | 'en';
-
-interface OrderItem {
-  name?: string | Record<string, string> | unknown;
-  nameAr?: string;
-  quantity: number;
-  price?: number;
-}
-
-interface Order {
-  id: string;
-  restaurantId?: string;
-  tableNumber?: string;
-  customerName?: string | Record<string, string> | unknown;
-  customerPhone?: string;
-  deliveryAddress?: string | Record<string, string> | unknown;
-  deliveryData?: {
-    name?: string | Record<string, string> | unknown;
-    address?: string | Record<string, string> | unknown;
-    phone?: string;
-  };
-  driverName?: string | Record<string, string> | unknown;
-  items: OrderItem[];
-  totalPrice?: number;
-  totalAmount?: number;
-  status: string;
-  createdAt?: unknown;
-}
 
 export default function CashierDashboard() {
   const [activeTab, setActiveTab] = useState<'local' | 'delivery'>('local');
@@ -64,12 +38,13 @@ export default function CashierDashboard() {
 
   // Filter orders by workflow type from the centralized context data
   const localOrders: Order[] = orders.filter(
-    (order: Order) =>
+    (order) =>
       order.restaurantId === currentRestaurantId &&
       order.status === 'ready_for_payment'
   );
+
   const deliveryOrders: Order[] = orders.filter(
-    (order: Order) =>
+    (order) =>
       order.restaurantId === currentRestaurantId &&
       order.status === 'delivered_unpaid'
   );
@@ -137,6 +112,7 @@ export default function CashierDashboard() {
               🇬🇧 EN
             </button>
           </div>
+
           <div className="rounded-xl bg-emerald-50 px-4 py-2 border border-emerald-100">
             <span className="text-sm text-emerald-700 font-bold">
               {safeText(t.activePortal)}
@@ -166,6 +142,7 @@ export default function CashierDashboard() {
             {localOrders.length}
           </span>
         </button>
+
         <button
           onClick={() => setActiveTab('delivery')}
           className={`flex items-center space-x-2 space-x-reverse px-6 py-3 font-bold text-sm transition-all border-b-2 ${
@@ -200,16 +177,15 @@ export default function CashierDashboard() {
             {localOrders.map((order: Order) => {
               const calculatedTotal = Array.isArray(order.items)
                 ? order.items.reduce(
-                    (sum: number, item: OrderItem) =>
+                    (sum, item) =>
                       sum +
-                      Number(item.price || 0) * Number(item.quantity || 1),
+                      Number(item.price ?? 0) * Number(item.quantity ?? 1),
                     0
                   )
                 : 0;
+
               const finalPrice =
-                order.totalPrice ??
-                order.totalAmount ??
-                calculatedTotal;
+                order.totalPrice ?? order.totalAmount ?? calculatedTotal;
 
               return (
                 <div
@@ -221,6 +197,7 @@ export default function CashierDashboard() {
                       {safeText(t.tablePrefix, 'طاولة ')}
                       {order.tableNumber || '??'}
                     </span>
+
                     <span className="text-xs font-bold text-orange-600 animate-pulse">
                       {safeText(t.readyForPayment, 'جاهز للدفع')}
                     </span>
@@ -231,15 +208,16 @@ export default function CashierDashboard() {
                       {safeText(t.referenceOrderNo, 'رقم الطلب')} #
                       {order.id.substring(0, 6)}
                     </span>
+
                     <ul className="space-y-2 border-b border-slate-100 pb-4">
                       {Array.isArray(order.items) &&
-                        order.items.map((item: OrderItem, index: number) => {
+                        order.items.map((item, index) => {
                           const itemName = safeText(
                             item.name || item.nameAr,
                             'وجبة'
                           );
-                          const itemPrice = Number(item.price || 0);
-                          const itemQuantity = Number(item.quantity || 1);
+                          const itemPrice = Number(item.price ?? 0);
+                          const itemQuantity = Number(item.quantity ?? 1);
 
                           return (
                             <li
@@ -252,6 +230,7 @@ export default function CashierDashboard() {
                                   x{itemQuantity}
                                 </span>
                               </span>
+
                               <span className="text-slate-800">
                                 {(itemPrice * itemQuantity).toLocaleString()}{' '}
                                 {safeText(t.currency, 'د.ج')}
@@ -260,10 +239,12 @@ export default function CashierDashboard() {
                           );
                         })}
                     </ul>
+
                     <div className="mt-4 flex justify-between items-center">
                       <span className="text-sm font-bold text-slate-500">
                         {safeText(t.totalCostLabel, 'الإجمالي')}
                       </span>
+
                       <span className="text-xl font-black text-slate-900">
                         {Number(finalPrice).toLocaleString()}{' '}
                         {safeText(t.currency, 'د.ج')}
@@ -284,129 +265,135 @@ export default function CashierDashboard() {
             })}
           </div>
         )
+      ) : /* Delivery orders tab */
+      deliveryOrders.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-16 text-center text-slate-400">
+          <span className="text-4xl block mb-2">🛵</span>
+          {safeText(t.noDeliveryOrders, 'لا توجد طلبات توصيل معلقة')}
+        </div>
       ) : (
-        /* Delivery orders tab */
-        deliveryOrders.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-16 text-center text-slate-400">
-            <span className="text-4xl block mb-2">🛵</span>
-            {safeText(t.noDeliveryOrders, 'لا توجد طلبات توصيل معلقة')}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {deliveryOrders.map((order: Order) => {
-              const rawCustomerName =
-                order.deliveryData?.name || order.customerName;
-              const customerName = safeText(
-                rawCustomerName,
-                safeText(t.unknownCustomer, 'زبون غير معروف')
-              );
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {deliveryOrders.map((order: Order) => {
+            const rawCustomerName =
+              order.deliveryData?.name || order.customerName;
 
-              const customerPhone =
-                order.deliveryData?.phone ||
-                order.customerPhone ||
-                safeText(t.noPhone, 'بدون رقم');
+            const customerName = safeText(
+              rawCustomerName,
+              safeText(t.unknownCustomer, 'زبون غير معروف')
+            );
 
-              const rawAddress =
-                order.deliveryData?.address || order.deliveryAddress;
-              const deliveryAddress = safeText(
-                rawAddress,
-                safeText(t.defaultAddress, 'عنوان غير محدد')
-              );
+            const customerPhone =
+              order.deliveryData?.phone ||
+              order.customerPhone ||
+              safeText(t.noPhone, 'بدون رقم');
 
-              const calculatedTotal = Array.isArray(order.items)
-                ? order.items.reduce(
-                    (sum: number, item: OrderItem) =>
-                      sum +
-                      Number(item.price || 0) * Number(item.quantity || 1),
-                    0
-                  )
-                : 0;
-              const finalPrice =
-                order.totalPrice ??
-                order.totalAmount ??
-                calculatedTotal;
+            const rawAddress =
+              order.deliveryData?.address || order.deliveryAddress;
 
-              const driverName = safeText(
-                order.driverName,
-                safeText(t.unspecifiedDriver, 'السائق')
-              );
+            const deliveryAddress = safeText(
+              rawAddress,
+              safeText(t.defaultAddress, 'عنوان غير محدد')
+            );
 
-              return (
-                <div
-                  key={order.id}
-                  className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-all overflow-hidden"
-                >
-                  <div className="bg-linear-to-l from-blue-50 to-white px-5 py-4 border-b border-slate-100 flex justify-between items-center">
-                    <div>
-                      <h3 className="font-black text-slate-800 text-sm">
-                        {safeText(t.customerLabel, 'الزبون:')} {customerName}
-                      </h3>
-                      <p className="text-xs text-slate-400" dir="ltr">
-                        {customerPhone}
-                      </p>
-                    </div>
-                    <span className="rounded-lg bg-blue-500 px-2.5 py-1 font-bold text-white text-xs">
-                      {safeText(t.driverLabel, 'السائق:')} {driverName}
+            const calculatedTotal = Array.isArray(order.items)
+              ? order.items.reduce(
+                  (sum, item) =>
+                    sum +
+                    Number(item.price ?? 0) * Number(item.quantity ?? 1),
+                  0
+                )
+              : 0;
+
+            const finalPrice =
+              order.totalPrice ?? order.totalAmount ?? calculatedTotal;
+
+            const driverName = safeText(
+              order.driverName,
+              safeText(t.unspecifiedDriver, 'السائق')
+            );
+
+            return (
+              <div
+                key={order.id}
+                className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-all overflow-hidden"
+              >
+                <div className="bg-linear-to-l from-blue-50 to-white px-5 py-4 border-b border-slate-100 flex justify-between items-center">
+                  <div>
+                    <h3 className="font-black text-slate-800 text-sm">
+                      {safeText(t.customerLabel, 'الزبون:')} {customerName}
+                    </h3>
+
+                    <p className="text-xs text-slate-400" dir="ltr">
+                      {customerPhone}
+                    </p>
+                  </div>
+
+                  <span className="rounded-lg bg-blue-500 px-2.5 py-1 font-bold text-white text-xs">
+                    {safeText(t.driverLabel, 'السائق:')} {driverName}
+                  </span>
+                </div>
+
+                <div className="p-5 grow">
+                  <div className="mb-4 rounded-lg bg-blue-50/50 p-2.5 border border-blue-100/50 text-xs font-medium text-blue-800">
+                    {safeText(t.addressLabel, 'العنوان:')} {deliveryAddress}
+                  </div>
+
+                  <ul className="space-y-2 border-b border-slate-100 pb-4">
+                    {Array.isArray(order.items) &&
+                      order.items.map((item, index) => {
+                        const itemName = safeText(
+                          item.name || item.nameAr,
+                          'وجبة'
+                        );
+
+                        const itemPrice = Number(item.price ?? 0);
+                        const itemQuantity = Number(item.quantity ?? 1);
+
+                        return (
+                          <li
+                            key={index}
+                            className="flex justify-between text-sm text-slate-600 font-medium"
+                          >
+                            <span>
+                              {itemName}{' '}
+                              <span className="text-xs text-slate-400">
+                                x{itemQuantity}
+                              </span>
+                            </span>
+
+                            <span className="text-slate-800">
+                              {(itemPrice * itemQuantity).toLocaleString()}{' '}
+                              {safeText(t.currency, 'د.ج')}
+                            </span>
+                          </li>
+                        );
+                      })}
+                  </ul>
+
+                  <div className="mt-4 flex justify-between items-center">
+                    <span className="text-sm font-bold text-slate-500">
+                      {safeText(t.totalRequiredLabel, 'المبلغ التحصيلي')}
+                    </span>
+
+                    <span className="text-xl font-black text-slate-900">
+                      {Number(finalPrice).toLocaleString()}{' '}
+                      {safeText(t.currency, 'د.ج')}
                     </span>
                   </div>
-
-                  <div className="p-5 grow">
-                    <div className="mb-4 rounded-lg bg-blue-50/50 p-2.5 border border-blue-100/50 text-xs font-medium text-blue-800">
-                      {safeText(t.addressLabel, 'العنوان:')} {deliveryAddress}
-                    </div>
-                    <ul className="space-y-2 border-b border-slate-100 pb-4">
-                      {Array.isArray(order.items) &&
-                        order.items.map((item: OrderItem, index: number) => {
-                          const itemName = safeText(
-                            item.name || item.nameAr,
-                            'وجبة'
-                          );
-                          const itemPrice = Number(item.price || 0);
-                          const itemQuantity = Number(item.quantity || 1);
-
-                          return (
-                            <li
-                              key={index}
-                              className="flex justify-between text-sm text-slate-600 font-medium"
-                            >
-                              <span>
-                                {itemName}{' '}
-                                <span className="text-xs text-slate-400">
-                                  x{itemQuantity}
-                                </span>
-                              </span>
-                              <span className="text-slate-800">
-                                {(itemPrice * itemQuantity).toLocaleString()}{' '}
-                                {safeText(t.currency, 'د.ج')}
-                              </span>
-                            </li>
-                          );
-                        })}
-                    </ul>
-                    <div className="mt-4 flex justify-between items-center">
-                      <span className="text-sm font-bold text-slate-500">
-                        {safeText(t.totalRequiredLabel, 'المبلغ التحصيلي')}
-                      </span>
-                      <span className="text-xl font-black text-slate-900">
-                        {Number(finalPrice).toLocaleString()}{' '}
-                        {safeText(t.currency, 'د.ج')}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-slate-50 border-t border-slate-100">
-                    <button
-                      onClick={() => handleConfirmPayment(order.id)}
-                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-black py-3 shadow-sm shadow-emerald-200 transition-all cursor-pointer"
-                    >
-                      {safeText(t.confirmDeliveryPaymentBtn, 'استلام المبلغ')}
-                    </button>
-                  </div>
                 </div>
-              );
-            })}
-          </div>
-        )
+
+                <div className="p-4 bg-slate-50 border-t border-slate-100">
+                  <button
+                    onClick={() => handleConfirmPayment(order.id)}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-black py-3 shadow-sm shadow-emerald-200 transition-all cursor-pointer"
+                  >
+                    {safeText(t.confirmDeliveryPaymentBtn, 'استلام المبلغ')}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
