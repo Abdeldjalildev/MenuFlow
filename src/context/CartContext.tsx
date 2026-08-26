@@ -66,17 +66,27 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Resolve cart IDs into full item objects using the current menu
   const getCartItemsDetails = (menuItems: MenuItem[]): CartItem[] => {
-    return Object.keys(cart).map(id => {
-      const item = menuItems.find(m => m.id === id || m._id === id);
-      return {
-        id,
-        name: item?.name || item?.nameAr || 'وجبة',
-        price: Number(item?.price || 0),
-        quantity: cart[id],
-        note: notes[id] || '',
-        image: item?.image || ''
-      };
-    });
+   return Object.keys(cart).map(id => {
+  const item = menuItems.find(m => m.id === id || m._id === id);
+
+  const rawName = item?.name ?? item?.nameAr;
+
+  const name =
+    typeof rawName === 'string'
+      ? rawName
+      : rawName && typeof rawName === 'object'
+        ? rawName.ar || rawName.fr || rawName.en || 'وجبة'
+        : 'وجبة';
+
+  return {
+    id,
+    name,
+    price: Number(item?.price ?? 0),
+    quantity: cart[id],
+    note: notes[id] ?? '',
+    image: item?.image ?? '',
+  };
+});
   };
 
   // Compute the cart total from live menu pricing
