@@ -12,9 +12,6 @@ interface MyReceiptsProps {
   onBack: () => void;
 }
 
-const isTranslationMap = (value: unknown): value is TranslationMap =>
-  typeof value === 'object' && value !== null;
-
 const safeText = (field: unknown, lang: Language, fallback = ''): string => {
   if (field === null || field === undefined || field === '') return fallback;
   if (typeof field === 'string' || typeof field === 'number') return String(field);
