@@ -19,11 +19,11 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
-  // Context modules intentionally export context objects/hooks alongside providers.
-  // Fast Refresh's component-only export rule is not applicable to these modules.
   {
-    files: ['src/context/*.ts', 'src/context/*.tsx'],
+    files: ['src/context/**/*.tsx'],
     rules: {
+      // Context modules intentionally export providers, contexts and hooks together.
+      // Fast Refresh's component-only export rule does not apply to these modules.
       'react-refresh/only-export-components': 'off',
     },
   },
