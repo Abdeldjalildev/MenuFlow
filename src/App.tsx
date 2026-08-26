@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { MenuProvider } from './context/MenuProvider';
 import { OrderProvider } from './context/OrderProvider';
-import { CartProvider } from './context/CartContext'; 
+import { CartProvider } from './context/CartProvider';
 import { CustomerMenu } from './components/customer/CustomerMenu';
 import { KitchenDashboard } from './components/kitchen/kitchenDashboard';
 import { MerchantDashboard } from './components/merchant/MerchantDashboard';
@@ -10,16 +10,10 @@ import { StaffScanner } from './pages/StaffScanner';
 import { useState, useEffect } from 'react';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-
-// استيراد صفحة تسجيل الدخول
 import { Login } from './pages/auth/Login';
-
-// استيراد الواجهات الجديدة
 import CashierDashboard from './components/cashier/CashierDashboard';
 import DeliveryDashboard from './components/delivery/DeliveryDashboard';
 import { SuperAdminDashboard } from './components/Admin/SuperAdminDashboard';
-
-// استيراد الهيكل والقوائم
 import { MerchantLayout } from './components/merchant/MerchantLayout';
 import { Overview } from './components/merchant/pages/Overview';
 import { Inventory } from './components/merchant/pages/Inventory';
@@ -36,11 +30,9 @@ import { Recipes } from './components/merchant/pages/Recipes';
 import { StockTake } from './components/merchant/pages/StockTake';
 import { ThemeSettings } from './components/merchant/pages/ThemeSettings';
 import { QrCreations } from './components/merchant/pages/QrCreations';
-
-// استيراد مكون الحماية (تأكد من إنشائه في مجلد الـ components أو المجلد المناسب لك)
 import { ProtectedRoute } from './routes/ProtectedRouteProps';
 
- function AppRoutes() {
+function AppRoutes() {
   const [lang, setLang] = useState<'en' | 'ar' | 'fr'>('en');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -58,24 +50,16 @@ import { ProtectedRoute } from './routes/ProtectedRouteProps';
 
   return (
     <Routes>
-      {/* المسارات العامة */}
       <Route path="/" element={<TableEntry onStart={() => navigate('/menu' + window.location.search)} lang={lang} setLang={setLang} />} />
       <Route path="/menu" element={<CustomerMenu />} />
       <Route path="/staff" element={<StaffScanner />} />
       <Route path="/login" element={<Login />} />
-
-      {/* المسارات المحمية باستخدام ProtectedRoute */}
       <Route path="/super-admin" element={<ProtectedRoute allowedRoles={['SuperAdmin']}><SuperAdminDashboard /></ProtectedRoute>} />
       <Route path="/kitchen" element={<ProtectedRoute allowedRoles={['Kitchen']}><KitchenDashboard /></ProtectedRoute>} />
       <Route path="/cashier" element={<ProtectedRoute allowedRoles={['Cashier']}><CashierDashboard /></ProtectedRoute>} />
       <Route path="/delivery" element={<ProtectedRoute allowedRoles={['Delivery']}><DeliveryDashboard /></ProtectedRoute>} />
-      
-      {/* مسارات صاحب المطعم */}
       <Route path="/merchant" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantDashboard /></ProtectedRoute>} />
-      
-      {/* المسار الاحتياطي لمنع الشاشة البيضاء عند الدخول بالرابط القديم */}
       <Route path="/merchant/dashboard" element={<Navigate to="/merchant/overview" replace />} />
-
       <Route path="/merchant/overview" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Overview /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/inventory" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Inventory /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/suppliers" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Suppliers /></MerchantLayout></ProtectedRoute>} />
