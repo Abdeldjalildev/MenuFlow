@@ -1,4 +1,4 @@
- import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db, auth } from '../../../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, query, where } from 'firebase/firestore';
@@ -299,11 +299,11 @@ export const Staff: React.FC<StaffProps> = (props) => {
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <form onSubmit={handleAddStaff} className="bg-white p-6 rounded-2xl max-w-sm w-full shadow-2xl space-y-3.5" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-            <h3 className="font-bold text-lg text-slate-800 pb-1 border-b">{t.addModalTitle || 'Add New Staff'}</h3>
+            <h3 className="font-bold text-lg text-slate-800 pb-1 border-b">{t.modalTitle || 'Add New Staff'}</h3>
 
             <input
               type="text"
-              placeholder={t.namePlaceholder || 'Full name'}
+              placeholder={t.modalNamePlaceholder || 'Full name'}
               value={newStaff.name}
               onChange={(e) => setNewStaff(prev => ({ ...prev, name: e.target.value }))}
               className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
@@ -311,13 +311,13 @@ export const Staff: React.FC<StaffProps> = (props) => {
             />
 
             <div>
-              <label className="text-xs font-semibold text-slate-500 mb-1 block">{t.roleLabel || 'Role'}</label>
+              <label className="text-xs font-semibold text-slate-500 mb-1 block">{t.modalRoleLabel || 'Role'}</label>
               <select
                 value={newStaff.role}
                 onChange={(e) => setNewStaff(prev => ({ ...prev, role: e.target.value }))}
                 className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
               >
-                <option value="Kitchen">{t.roles?.kitchen || 'Kitchen'}</option>
+                <option value="Kitchen">Kitchen</option>
                 <option value="Waiter">{t.roles?.waiter || 'Waiter'}</option>
                 <option value="Cashier">{t.roles?.cashier || 'Cashier'}</option>
                 <option value="Delivery">{t.roles?.delivery || 'Delivery'}</option>
@@ -328,7 +328,7 @@ export const Staff: React.FC<StaffProps> = (props) => {
               <Phone size={16} className="absolute top-3 left-3 text-slate-400" />
               <input
                 type="tel"
-                placeholder={t.phonePlaceholder || 'Phone number'}
+                placeholder={t.modalPhonePlaceholder || 'Phone number'}
                 value={newStaff.phone}
                 onChange={(e) => setNewStaff(prev => ({ ...prev, phone: e.target.value }))}
                 className="w-full p-2.5 pl-9 border rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
@@ -340,7 +340,7 @@ export const Staff: React.FC<StaffProps> = (props) => {
               <Lock size={16} className="absolute top-3 left-3 text-slate-400" />
               <input
                 type="password"
-                placeholder={t.passwordPlaceholder || 'Password'}
+                placeholder={t.modalPasswordLabel || 'Temporary Password'}
                 value={newStaff.password}
                 onChange={(e) => setNewStaff(prev => ({ ...prev, password: e.target.value }))}
                 className="w-full p-2.5 pl-9 border rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
@@ -352,7 +352,7 @@ export const Staff: React.FC<StaffProps> = (props) => {
             <input
               type="number"
               min="0"
-              placeholder={t.salaryPlaceholder || 'Monthly salary'}
+              placeholder={t.modalSalaryLabel || 'Monthly salary'}
               value={newStaff.salary}
               onChange={(e) => setNewStaff(prev => ({ ...prev, salary: Number(e.target.value) || 0 }))}
               className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
@@ -360,10 +360,10 @@ export const Staff: React.FC<StaffProps> = (props) => {
 
             <div className="flex gap-2 pt-2">
               <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-600 font-semibold">
-                {t.cancelButton || 'Cancel'}
+                {t.cancelBtn || 'Cancel'}
               </button>
               <button type="submit" className="flex-1 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold">
-                {t.saveButton || 'Save'}
+                {t.saveBtn || 'Save'}
               </button>
             </div>
           </form>

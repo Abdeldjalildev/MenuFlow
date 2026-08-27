@@ -1,6 +1,6 @@
- import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../../../firebase';
-import { collection, onSnapshot, updateDoc, doc, deleteDoc , where, query} from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, deleteDoc, where, query } from 'firebase/firestore';
 import { Trash2, CheckCircle2, User, Phone, Star, ThumbsUp, AlertOctagon } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { translations } from '../../../utils/translations/merchantTranslations';
@@ -19,10 +19,10 @@ interface Feedback {
   tableNumber: string;
   message: string;
   status: 'pending' | 'resolved';
-  date: any;
+  date: string;
   rating?: number; // التقييم بالنجوم (1 إلى 5)
   type?: 'review' | 'complaint'; // اختياري في حال تم تحديده صراحة
-  createdAtRaw?: any;
+  createdAtRaw?: number;
 }
 
 export const Complaints: React.FC<ComplaintsProps> = (props) => {
@@ -41,7 +41,7 @@ export const Complaints: React.FC<ComplaintsProps> = (props) => {
   const [activeFilter, setActiveFilter] = useState<'all' | 'reviews' | 'complaints'>('all');
 
   // جلب الآراء والشكاوى حية من الفايربيس
-// جلب الآراء والشكاوى الخاصة بهذا المطعم فقط حية من الفايربيس
+  // جلب الآراء والشكاوى الخاصة بهذا المطعم فقط حية من الفايربيس
   useEffect(() => {
     const localeMap = { ar: 'ar-DZ', fr: 'fr-FR', en: 'en-US' };
 
@@ -55,11 +55,13 @@ export const Complaints: React.FC<ComplaintsProps> = (props) => {
       const data = snapshot.docs.map(docSnap => {
         const docData = docSnap.data();
         const dateObj = docData.createdAt?.toDate ? docData.createdAt.toDate() : new Date();
+        const createdAtRaw = dateObj.getTime();
         
         return {
-          id: docSnap.id,
           ...docData,
-          date: dateObj.toLocaleDateString(localeMap[lang] || 'ar-DZ')
+          id: docSnap.id,
+          date: dateObj.toLocaleDateString(localeMap[lang] || 'ar-DZ'),
+          createdAtRaw,
         } as Feedback;
       });
       // ترتيب زمني (الأحدث أولاً)
@@ -109,7 +111,7 @@ export const Complaints: React.FC<ComplaintsProps> = (props) => {
         </button>
         <button
           onClick={() => setActiveFilter('reviews')}
-        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeFilter === 'reviews' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeFilter === 'reviews' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
           <ThumbsUp size={16} />
           {lang === 'ar' ? 'الآراء الإيجابية' : 'Positive Reviews'}

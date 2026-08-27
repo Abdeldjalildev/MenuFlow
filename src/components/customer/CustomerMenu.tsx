@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMenu } from '../../context/MenuContext';
+import type { MenuItem } from '../../context/MenuContext';
 import { useCart } from '../../context/CartContext';
 import { OrderContext } from '../../context/OrderProvider';
 import { TableEntry } from '../../pages/TableEntry';
@@ -48,7 +49,6 @@ export const CustomerMenu: React.FC = () => {
   const [searchParams] = useSearchParams();
   
   const [hasStarted, setHasStarted] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
   const [isOrderPlaced, setIsOrderPlaced] = useState(false);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [activeCategory, setActiveCategory] = useState('all');
@@ -132,16 +132,10 @@ export const CustomerMenu: React.FC = () => {
     return () => unsub();
   }, []);
 
-  useEffect(() => {
-    const tableFromUrl = searchParams.get('table');
-    setTable(tableFromUrl ? tableFromUrl : '0');
-    setIsChecking(false);
-  }, [searchParams, setTable]);
-
   const prepareOrderPayloadData = () => {
     let totalAmount = 0;
     const formattedItems = Object.keys(cart).map(id => {
-      const item: any = menuItems.find((m: any) => m.id === id || m._id === id);
+      const item: MenuItem | undefined = menuItems.find((m) => m.id === id || m._id === id);
       const quantity = cart[id];
       const originalPrice = Number(item?.price || 0);
       
@@ -152,7 +146,7 @@ export const CustomerMenu: React.FC = () => {
       const itemTotal = discountedPrice * quantity;
       totalAmount += itemTotal;
 
-      const rawNameAr = typeof item?.name === 'object' ? item?.name?.ar : (item?.nameAr || item?.name || '');
+      const rawNameAr = item?.name?.ar || '';
       return {
         id,
         menuItemId: id,
@@ -263,22 +257,12 @@ export const CustomerMenu: React.FC = () => {
   const localCustomerId = localStorage.getItem('menu_customer_id');
 
   const currentOrder = currentTable && localCustomerId
-    ? orders.find((o: any) => 
+    ? orders.find((o) => 
         o.tableNumber === currentTable && 
         o.customerId === localCustomerId && 
         o.status !== 'TrackDone'
       ) 
     : null;
-
-  // Reset the order-placed flag when the active order finishes or disappears,
-  // allowing the customer to start a fresh order cycle without stale UI state.
-  useEffect(() => {
-    if (!currentOrder && isOrderPlaced) {
-      setIsOrderPlaced(false);
-    }
-  }, [currentOrder, isOrderPlaced]);
-
-  if (isChecking) return null;
 
   if (!hasStarted) {
     return <TableEntry lang={lang} setLang={setLang} onStart={() => setHasStarted(true)} />;
@@ -369,7 +353,7 @@ export const CustomerMenu: React.FC = () => {
             <MenuOrOrderManager
               showDeliveryForm={showDeliveryForm}
               isOrderPlaced={isOrderPlaced}
-              currentOrder={currentOrder}
+              currentOrder={currentOrder ?? null}
               onDeliveryConfirm={(name, address, phone) => handleFinalSubmit({ name, address, phone })}
               t={t}
               themeColor={effectivePrimaryColor}
