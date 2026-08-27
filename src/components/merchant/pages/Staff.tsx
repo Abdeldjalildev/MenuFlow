@@ -311,7 +311,7 @@ export const Staff: React.FC<StaffProps> = (props) => {
             />
 
             <div>
-              <label className="text-xs font-semibold text-slate-500 mb-1 block">{t.tableRole || 'Role'}</label>
+              <label className="text-xs font-semibold text-slate-500 mb-1 block">{t.modalRoleLabel || 'Role'}</label>
               <select
                 value={newStaff.role}
                 onChange={(e) => setNewStaff(prev => ({ ...prev, role: e.target.value }))}
@@ -340,7 +340,7 @@ export const Staff: React.FC<StaffProps> = (props) => {
               <Lock size={16} className="absolute top-3 left-3 text-slate-400" />
               <input
                 type="password"
-                placeholder={t.modalPasswordPlaceholder || 'Password'}
+                placeholder={t.modalPasswordLabel || 'Temporary Password'}
                 value={newStaff.password}
                 onChange={(e) => setNewStaff(prev => ({ ...prev, password: e.target.value }))}
                 className="w-full p-2.5 pl-9 border rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
@@ -352,7 +352,7 @@ export const Staff: React.FC<StaffProps> = (props) => {
             <input
               type="number"
               min="0"
-              placeholder={t.modalSalaryPlaceholder || 'Monthly salary'}
+              placeholder={t.modalSalaryLabel || 'Monthly salary'}
               value={newStaff.salary}
               onChange={(e) => setNewStaff(prev => ({ ...prev, salary: Number(e.target.value) || 0 }))}
               className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
