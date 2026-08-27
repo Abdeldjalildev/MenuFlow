@@ -1,4 +1,4 @@
- import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../../../firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { Settings, Store, Percent, Truck, Save, CheckCircle, Globe } from 'lucide-react';
@@ -12,6 +12,12 @@ interface ControlPanelProps {
   setLang?: (l: Language) => void;
 }
 
+interface ControlPanelSettings {
+  restaurantName: string;
+  taxRate: number;
+  deliveryFee: number;
+}
+
 export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
   // استقبال lang و setLang من MerchantLayout الموحد
   const outletContext = useOutletContext<{ lang: Language; setLang: (l: Language) => void }>() || {};
@@ -22,7 +28,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
   // 🏢 جلب معرف المطعم الحالي
   const restaurantId = localStorage.getItem('restaurantId') || 'default_restaurant';
 
-  const [settings, setSettings] = useState({ restaurantName: '', taxRate: 0, deliveryFee: 0 });
+  const [settings, setSettings] = useState<ControlPanelSettings>({ restaurantName: '', taxRate: 0, deliveryFee: 0 });
   const [saved, setSaved] = useState(false);
   
   const t = translations[lang].controlPanel;
@@ -31,7 +37,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'settings', restaurantId), (docSnap) => {
       if (docSnap.exists()) {
-        setSettings(docSnap.data() as any);
+        const data = docSnap.data();
+        setSettings({
+          restaurantName: typeof data.restaurantName === 'string' ? data.restaurantName : '',
+          taxRate: Number(data.taxRate || 0),
+          deliveryFee: Number(data.deliveryFee || 0),
+        });
       } else {
         // قيم افتراضية إذا لم تكن الإعدادات موجودة بعد
         setSettings({ restaurantName: '', taxRate: 0, deliveryFee: 0 });
