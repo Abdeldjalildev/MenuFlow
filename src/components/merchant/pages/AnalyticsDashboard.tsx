@@ -56,7 +56,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = (props) => 
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="name" fontSize={12} />
             <YAxis fontSize={12} orientation={lang === 'ar' ? 'right' : 'left'} />
-            <Tooltip formatter={(value: unknown) => [value, t.salesCount]} />
+            <Tooltip formatter={(value) => [String(value ?? ''), t.salesCount]} />
             <Bar dataKey="sales" fill="#6366f1" radius={[8, 8, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
