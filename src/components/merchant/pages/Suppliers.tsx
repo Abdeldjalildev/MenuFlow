@@ -24,6 +24,14 @@ interface Supplier {
   restaurantId?: string;
 }
 
+interface InventoryUpdateData {
+  currentQuantity: ReturnType<typeof increment>;
+  supplierName: string;
+  updatedAt: ReturnType<typeof serverTimestamp>;
+  minQuantity?: number;
+  minOrderQuantity?: number;
+}
+
 export const Suppliers: React.FC<SuppliersProps> = (props) => {
   const outletContext = useOutletContext<{ lang: Language }>() || {};
   const lang = props.lang || outletContext.lang || 'ar';
@@ -45,9 +53,7 @@ export const Suppliers: React.FC<SuppliersProps> = (props) => {
     suppliedQuantity: 0,
   });
 
-  useEffect(() => {
-    setNewSupplier(prev => ({ ...prev, category: t.categories.meats }));
-  }, [lang, t.categories.meats]);
+  // Category follows the active language when opening/resetting the form.
 
   // ✅ جلب الموردين الخاصين بالمطعم الحالي فقط
   useEffect(() => {
@@ -133,7 +139,7 @@ export const Suppliers: React.FC<SuppliersProps> = (props) => {
           const existingDoc = querySnapshot.docs[0];
           const itemDocRef = doc(db, 'inventory', existingDoc.id);
 
-          const updatePayload: any = {
+          const updatePayload: InventoryUpdateData = {
             currentQuantity: increment(quantityToAdd),
             supplierName: newSupplier.companyName,
             updatedAt: serverTimestamp()
@@ -188,7 +194,10 @@ export const Suppliers: React.FC<SuppliersProps> = (props) => {
           <p className="text-sm text-slate-500">{t.subtitle}</p>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+            setNewSupplier(prev => ({ ...prev, category: t.categories.meats }));
+            setShowAddModal(true);
+          }}
           className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 transition shadow-md text-sm"
         >
           <Plus size={18} />
@@ -252,7 +261,7 @@ export const Suppliers: React.FC<SuppliersProps> = (props) => {
                     <div className="text-xs text-slate-500" dir="ltr">{supplier.phone}</div>
                   </td>
                   <td className="p-4 font-semibold text-slate-700">
-                    {supplier.minOrderQuantity ?` ${supplier.minOrderQuantity} `: '—'}
+                    {supplier.minOrderQuantity ? ` ${supplier.minOrderQuantity} ` : '—'}
                   </td>
                   <td className="p-4 font-semibold text-amber-600">
                     {Number(supplier.pendingBalance || 0).toLocaleString()} {t.currency}
@@ -285,7 +294,7 @@ export const Suppliers: React.FC<SuppliersProps> = (props) => {
           </tbody>
         </table>
       </div>
-          {/* مودال الإضافة */}
+      {/* مودال الإضافة */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn">
           <form onSubmit={handleAddSupplier} className="bg-white p-6 rounded-2xl max-w-lg w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
