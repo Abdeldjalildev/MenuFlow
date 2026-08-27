@@ -58,9 +58,18 @@ export const DigitalReceipt: React.FC<DigitalReceiptProps> = ({
       const rawDate = order.createdAt;
       let date: Date;
 
-      if (rawDate && 'toDate' in rawDate && typeof rawDate.toDate === 'function') {
+      if (
+        rawDate &&
+        typeof rawDate === 'object' &&
+        'toDate' in rawDate &&
+        typeof rawDate.toDate === 'function'
+      ) {
         date = rawDate.toDate();
-      } else if (rawDate && 'seconds' in rawDate) {
+      } else if (
+        rawDate &&
+        typeof rawDate === 'object' &&
+        'seconds' in rawDate
+      ) {
         date = new Date(rawDate.seconds * 1000);
       } else if (rawDate instanceof Date) {
         date = rawDate;
