@@ -1,5 +1,7 @@
 import React, { createContext, useState, useContext } from 'react';
 
+/* eslint-disable react-refresh/only-export-components */
+
 // Cart line item shape with notes and pricing
 export interface CartItem {
   id: string;
@@ -54,7 +56,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const updateNote = (id: string, note: string) => 
+  const updateNote = (id: string, note: string) =>
     setNotes(prev => ({ ...prev, [id]: note }));
 
   const clearCart = () => {
@@ -66,27 +68,27 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Resolve cart IDs into full item objects using the current menu
   const getCartItemsDetails = (menuItems: MenuItem[]): CartItem[] => {
-   return Object.keys(cart).map(id => {
-  const item = menuItems.find(m => m.id === id || m._id === id);
+    return Object.keys(cart).map(id => {
+      const item = menuItems.find(m => m.id === id || m._id === id);
 
-  const rawName = item?.name ?? item?.nameAr;
+      const rawName = item?.name ?? item?.nameAr;
 
-  const name =
-    typeof rawName === 'string'
-      ? rawName
-      : rawName && typeof rawName === 'object'
-        ? rawName.ar || rawName.fr || rawName.en || 'وجبة'
-        : 'وجبة';
+      const name =
+        typeof rawName === 'string'
+          ? rawName
+          : rawName && typeof rawName === 'object'
+            ? rawName.ar || rawName.fr || rawName.en || 'وجبة'
+            : 'وجبة';
 
-  return {
-    id,
-    name,
-    price: Number(item?.price ?? 0),
-    quantity: cart[id],
-    note: notes[id] ?? '',
-    image: item?.image ?? '',
-  };
-});
+      return {
+        id,
+        name,
+        price: Number(item?.price ?? 0),
+        quantity: cart[id],
+        note: notes[id] ?? '',
+        image: item?.image ?? '',
+      };
+    });
   };
 
   // Compute the cart total from live menu pricing
@@ -94,18 +96,18 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return Object.keys(cart).reduce((sum, id) => {
       const item = menuItems.find(m => m.id === id || m._id === id);
       const price = Number(item?.price || 0);
-      return sum + (price * cart[id]);
+      return sum + price * cart[id];
     }, 0);
   };
 
   return (
-    <CartContext.Provider value={{ 
-      cart, 
-      notes, 
-      handleAddToCart, 
+    <CartContext.Provider value={{
+      cart,
+      notes,
+      handleAddToCart,
       removeFromCart,
-      updateNote, 
-      clearCart, 
+      updateNote,
+      clearCart,
       cartCount,
       getCartItemsDetails,
       calculateTotal
