@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
-import { MenuContext, MenuItem } from './MenuContext';
+import { MenuContext, type MenuItem } from './MenuContext';
 
 const defaultItems: MenuItem[] = [
   { id: 'default_1', name: { ar: 'برجر كلاسيك', en: 'Classic Burger', fr: 'Burger Classique' }, price: 450, category: 'burgers', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=60' },
