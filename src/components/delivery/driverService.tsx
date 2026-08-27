@@ -9,7 +9,7 @@ export const claimOrderForDriver = async (
   orderId: string,
   driverId: string,
   driverName: string
-): Promise<{ success: boolean; message?: string; error?: any }> => {
+): Promise<{ success: boolean; message?: string; error?: unknown }> => {
   try {
     const orderRef = doc(db, 'orders', orderId);
     const orderSnap = await getDoc(orderRef);
@@ -20,7 +20,6 @@ export const claimOrderForDriver = async (
 
     const orderData = orderSnap.data();
 
-    // Prevent claiming if another driver already owns it
     if (orderData.isClaimed && orderData.driverId && orderData.driverId !== driverId) {
       return { success: false, message: 'Order already claimed by another driver' };
     }

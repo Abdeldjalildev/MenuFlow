@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { OrderContext, type Order } from '../../context/OrderProvider';
+import { OrderContext, type Order, type OrderItem } from '../../context/OrderProvider';
 import { formatDistanceToNow } from 'date-fns';
 import { ar, fr, enUS } from 'date-fns/locale';
 import { kitchenTranslations } from '../../utils/translations/kitchenTranslations';
@@ -21,16 +21,18 @@ export const KitchenDashboard: React.FC = () => {
         return paramId;
       }
       return localStorage.getItem('restaurantId') || 'default_restaurant';
-    } catch (e) {
+    } catch {
       return 'default_restaurant';
     }
   };
 
-  const safeText = (field: any, fallback: string = '') => {
+  const safeText = (field: unknown, fallback: string = ''): string => {
     if (!field) return fallback;
     if (typeof field === 'string' || typeof field === 'number') return String(field);
-    if (typeof field === 'object') {
-      return field[lang] || field.ar || field.fr || field.en || fallback;
+    if (typeof field === 'object' && field !== null) {
+      const localized = field as Record<string, unknown>;
+      const value = localized[lang] ?? localized.ar ?? localized.fr ?? localized.en;
+      return typeof value === 'string' || typeof value === 'number' ? String(value) : fallback;
     }
     return fallback;
   };
@@ -48,44 +50,46 @@ export const KitchenDashboard: React.FC = () => {
   const currentRestaurantId = getRestaurantId();
 
   // Filter active orders: show them, dim finished ones, hide paid/completed entirely
-  const activeOrders = orders.filter((o: any) => {
+  const activeOrders = orders.filter((o: Order) => {
     const matchesRestaurant = o.restaurantId ? o.restaurantId === currentRestaurantId : true;
-    const status = o.status as any;
-    
+    const status = o.status;
+
     // Exclude orders that are fully paid or completed so they disappear completely
     const isFinished = status === 'paid' || status === 'completed' || status === 'TrackDone';
-    
+
     return matchesRestaurant && !isFinished;
   });
 
   const deliveryOrders = activeOrders.filter((o: Order) => o.tableNumber === '0');
   const tableOrders = activeOrders.filter((o: Order) => o.tableNumber !== '0');
 
-  const getElapsedTime = (createdAt: any) => {
+  const getElapsedTime = (createdAt: Order['createdAt']) => {
     if (!createdAt) return t('notAvailable');
-    const date = createdAt?.toDate ? createdAt.toDate() : new Date(createdAt);
+    const date = typeof createdAt === 'object' && 'toDate' in createdAt
+      ? createdAt.toDate()
+      : new Date(createdAt);
     if (isNaN(date.getTime())) return t('notAvailable');
     return formatDistanceToNow(date, { addSuffix: true, locale: getDateLocale() });
   };
 
-  const OrderCard = ({ order }: { order: any }) => {
-    const currentStatus = order.status as any;
+  const OrderCard = ({ order }: { order: Order }) => {
+    const currentStatus = order.status;
 
     // Include on_the_way so the card dims once the driver departs
-    const isReadyForNextStep = 
-      currentStatus === 'ready_for_payment' ||   
-      currentStatus === 'ready_for_delivery' ||   
-      currentStatus === 'on_the_way' ||   
+    const isReadyForNextStep =
+      currentStatus === 'ready_for_payment' ||
+      currentStatus === 'ready_for_delivery' ||
+      currentStatus === 'on_the_way' ||
       currentStatus === 'delivered_unpaid';
 
     // Detect newly appended items so the kitchen can still interact with the card
-    const hasAppendedItems = Array.isArray(order.items) && order.items.some((item: any) => item.isAppended);
+    const hasAppendedItems = Array.isArray(order.items) && order.items.some((item: OrderItem) => item.isAppended);
 
     const handleMarkAsReady = () => {
       if (order.tableNumber === '0') {
-        updateOrderStatus(order.id, 'ready_for_delivery' as any);
+        updateOrderStatus(order.id, 'ready_for_delivery');
       } else {
-        updateOrderStatus(order.id, 'ready_for_payment' as any);
+        updateOrderStatus(order.id, 'ready_for_payment');
       }
     };
 
@@ -100,7 +104,7 @@ export const KitchenDashboard: React.FC = () => {
         <div>
             <h2 className="font-extrabold text-xl text-indigo-800">
               {order.tableNumber === '0'
-                ? t('deliveryOrderTitle') 
+                ? t('deliveryOrderTitle')
                 : `${t('tableOrderTitle')}${order.tableNumber}`}
             </h2>
             <p className="text-sm font-bold text-slate-500 mt-1">
@@ -130,26 +134,26 @@ export const KitchenDashboard: React.FC = () => {
 
         {/* Item list with newly appended items highlighted */}
         <ul className="text-sm space-y-3 mb-6">
-          {Array.isArray(order.items) && order.items.map((item: any, idx: number) => {
-            const rawName = item.name || item.nameAr || item.menuItem?.name;
+          {Array.isArray(order.items) && order.items.map((item: OrderItem, idx: number) => {
+            const rawName = item.name || item.nameAr;
             const itemName = safeText(rawName, t('defaultProductName'));
             const noteText = safeText(item.note || item.notes);
             const isAppended = !!item.isAppended;
 
             return (
-              <li 
-                key={idx} 
+              <li
+                key={item.id || item.menuItemId || idx}
                 className={`flex justify-between items-center p-2.5 rounded-xl border transition-all ${
-                  isAppended 
-                    ? 'bg-amber-100/80 border-amber-300 dark:bg-amber-900/30 dark:border-amber-700/50 shadow-sm' 
+                  isAppended
+                    ? 'bg-amber-100/80 border-amber-300 dark:bg-amber-900/30 dark:border-amber-700/50 shadow-sm'
                     : 'bg-slate-50 border-slate-100'
                 }`}
               >
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-slate-800">
-                    {item.quantity || 1}x {itemName}
+                    {item.quantity || item.qty || 1}x {itemName}
                   </span>
-                  
+
                   {isAppended && (
                     <span className="bg-amber-500 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shadow-sm animate-pulse">
                       ✨ {t('appendedItem')}
@@ -169,8 +173,8 @@ export const KitchenDashboard: React.FC = () => {
 
         <div className="flex gap-3">
           {currentStatus === 'pending' && (
-            <button 
-              onClick={() => updateOrderStatus(order.id, 'preparing')} 
+            <button
+              onClick={() => updateOrderStatus(order.id, 'preparing')}
               className="flex-1 bg-amber-500 text-white py-3 rounded-2xl font-bold hover:bg-amber-600 transition shadow-md"
             >
               {t('startPreparing')}
@@ -179,8 +183,8 @@ export const KitchenDashboard: React.FC = () => {
 
           {/* Allow marking ready whether the order is preparing or already claimed by a driver */}
           {(currentStatus === 'preparing' || currentStatus === 'driver_claimed') && (
-            <button 
-              onClick={handleMarkAsReady} 
+            <button
+              onClick={handleMarkAsReady}
               className="flex-1 bg-blue-600 text-white py-3 rounded-2xl font-bold hover:bg-blue-700 transition shadow-md"
             >
               {t('readyFully')}
@@ -204,7 +208,7 @@ export const KitchenDashboard: React.FC = () => {
     <div className="p-6 bg-slate-50 min-h-screen" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-slate-800">{t('title')}</h1>
-        
+
         <div className="flex gap-2 bg-slate-200 p-1.5 rounded-2xl shadow-inner">
           <button
             onClick={() => setLang('ar')}
@@ -232,7 +236,7 @@ export const KitchenDashboard: React.FC = () => {
           </button>
         </div>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
         <div className="bg-amber-50/50 p-6 rounded-3xl border border-amber-100">
           <h2 className="text-xl font-bold mb-4 text-amber-800 flex items-center gap-2">

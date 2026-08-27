@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import { OrderContext } from '../../context/OrderProvider';
+import { OrderContext, type Order, type OrderItem } from '../../context/OrderProvider';
 import { AnalyticsDashboard } from './pages/AnalyticsDashboard';
 import { useOutletContext } from 'react-router-dom';
 import { translations } from '../../utils/translations/merchantTranslations';
@@ -38,18 +38,18 @@ const getStatusBadgeClasses = (status: string): string => {
 
 export const MerchantDashboard: React.FC<MerchantDashboardProps> = (props) => {
   // Inherit unified language state from parent router or props
-  const outletContext = useOutletContext<{ lang: Language }>() || {};
+  const outletContext = useOutletContext<{ lang?: Language }>() || {};
   const lang = props.lang || outletContext.lang || 'ar';
   const t = translations[lang].merchantDashboard;
 
   const context = useContext(OrderContext);
-  const orders = context?.orders || [];
+  const orders: Order[] = context?.orders || [];
   const updateOrderStatus = context?.updateOrderStatus || (async () => {});
 
   // Exclude orders that are no longer under merchant control:
   // paid, completed, delivered_unpaid, TrackDone, and on_the_way
-  const terminalStatuses = ['paid', 'completed', 'delivered_unpaid', 'TrackDone', 'on_the_way'];
-  const activeOrders = orders.filter((o: any) => !terminalStatuses.includes(o.status));
+  const terminalStatuses: Order['status'][] = ['paid', 'completed', 'delivered_unpaid', 'TrackDone', 'on_the_way'];
+  const activeOrders = orders.filter((o: Order) => !terminalStatuses.includes(o.status));
 
   return (
     <div className="p-6 bg-slate-50 min-h-screen" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
@@ -64,7 +64,7 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = (props) => {
         {activeOrders.length === 0 ? (
           <p className="text-slate-500 text-center py-10">{t.noOrders}</p>
         ) : (
-          activeOrders.map((order: any) => {
+          activeOrders.map((order: Order) => {
             const itemNameKey = lang === 'ar' ? 'ar' : lang === 'fr' ? 'fr' : 'en';
 
             return (
@@ -72,12 +72,12 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = (props) => {
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h2 className="font-bold text-lg text-indigo-700">
-                      {order.tableNumber === '0' || order.tableNumber === 0
+                      {order.tableNumber === '0'
                         ? t.deliveryOrder
                         : t.tableOrder.replace('{tableNumber}', order.tableNumber?.toString() || '')}
                     </h2>
                     <p className="text-xs text-slate-400 mt-1">
-                      {t.dailyOrderNumber.replace('{number}', order.orderNumber || t.unspecifiedNumber)}
+                      {t.dailyOrderNumber.replace('{number}', order.orderNumber?.toString() || t.unspecifiedNumber)}
                     </p>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${getStatusBadgeClasses(order.status)}`}>
@@ -86,11 +86,14 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = (props) => {
                 </div>
                 
                 <ul className="text-sm space-y-1 mb-4 border-t pt-4">
-                  {order.items?.map((item: any, idx: number) => {
-                    const itemName = item?.menuItem?.name?.[itemNameKey] || item?.menuItem?.name?.ar || item?.name || '';
+                  {order.items?.map((item: OrderItem, idx: number) => {
+                    const rawName = item.name;
+                    const itemName = typeof rawName === 'object' && rawName !== null
+                      ? rawName[itemNameKey] || rawName.ar || rawName.fr || rawName.en || ''
+                      : rawName || item.nameAr || '';
                     return (
-                      <li key={idx} className="flex justify-between text-slate-700 font-medium">
-                        <span>{item.quantity}x {itemName}</span>
+                      <li key={item.id || item.menuItemId || idx} className="flex justify-between text-slate-700 font-medium">
+                        <span>{item.quantity || item.qty || 1}x {itemName}</span>
                       </li>
                     );
                   })}

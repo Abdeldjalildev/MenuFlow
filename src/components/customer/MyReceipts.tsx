@@ -1,9 +1,10 @@
 import React, { useState, useContext } from 'react';
-import { OrderContext } from '../../context/OrderProvider';
+import { OrderContext, type Order, type OrderItem } from '../../context/OrderProvider';
 import { myReceiptsTranslations } from '../../utils/translations/myReceiptsTranslations';
 import { ArrowLeft, Receipt, Star, Clock, MapPin, Phone } from 'lucide-react';
 
 type Language = 'ar' | 'fr' | 'en';
+type TranslationMap = Record<string, string>;
 
 interface MyReceiptsProps {
   lang: Language;
@@ -11,46 +12,56 @@ interface MyReceiptsProps {
   onBack: () => void;
 }
 
+const safeText = (field: unknown, lang: Language, fallback = ''): string => {
+  if (field === null || field === undefined || field === '') return fallback;
+  if (typeof field === 'string' || typeof field === 'number') return String(field);
+  if (typeof field === 'object') {
+    const values = field as Record<string, unknown>;
+    for (const key of [lang, 'ar', 'fr', 'en']) {
+      const value = values[key];
+      if (typeof value === 'string' || typeof value === 'number') return String(value);
+    }
+  }
+  return fallback;
+};
+
+const formatDate = (timestamp: Order['createdAt'], lang: Language): string => {
+  if (!timestamp) return '';
+  const date =
+    typeof timestamp === 'object' && 'toDate' in timestamp
+      ? timestamp.toDate()
+      : new Date(timestamp);
+
+  return date.toLocaleDateString(
+    lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-US',
+    { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }
+  );
+};
+
 export const MyReceipts: React.FC<MyReceiptsProps> = ({ lang, activeOrderId, onBack }) => {
   const { orders } = useContext(OrderContext);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(activeOrderId || null);
 
-  const t = (key: string) => {
-    return (myReceiptsTranslations[lang] as any)?.[key] || (myReceiptsTranslations['ar'] as any)?.[key] || key;
+  const t = (key: string): string => {
+    const current = myReceiptsTranslations[lang] as unknown as TranslationMap;
+    const fallback = myReceiptsTranslations.ar as unknown as TranslationMap;
+    return current[key] || fallback[key] || key;
   };
 
-  const safeText = (field: any, fallback: string = '') => {
-    if (!field) return fallback;
-    if (typeof field === 'string' || typeof field === 'number') return String(field);
-    if (typeof field === 'object') {
-      return field[lang] || field.ar || field.fr || field.en || fallback;
-    }
-    return fallback;
-  };
-
-  // Derive receipt history from centralized context data instead of a local listener
   const customerId = localStorage.getItem('menu_customer_id');
-  const myOrders = orders.filter((o: any) => {
-    const isMine = !customerId || o.customerId === customerId;
-    const isFinished = o.status === 'completed' || o.status === 'paid' || o.status === 'TrackDone';
+  const myOrders = orders.filter((order) => {
+    const isMine = !customerId || order.customerId === customerId;
+    const isFinished = order.status === 'completed' || order.status === 'paid' || order.status === 'TrackDone';
     return isMine && isFinished;
   });
 
-  const selectedOrder = myOrders.find((o: any) => o.id === selectedOrderId);
-
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleDateString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-US', {
-      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-  };
+  const selectedOrder = myOrders.find((order) => order.id === selectedOrderId);
 
   return (
     <div className="max-w-md mx-auto px-4 pb-24">
       <div className="flex items-center gap-3 mb-6">
-        <button 
-          onClick={onBack} 
+        <button
+          onClick={onBack}
           className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 transition"
         >
           <ArrowLeft size={20} className="text-slate-600 dark:text-slate-300" />
@@ -68,14 +79,14 @@ export const MyReceipts: React.FC<MyReceiptsProps> = ({ lang, activeOrderId, onB
           <div className="bg-slate-50 dark:bg-slate-800/50 p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
             <div>
               <h3 className="font-bold text-slate-800 dark:text-white">
-                {t('order')} #{selectedOrder.orderNumber || selectedOrder.id?.substring(0, 6)}
+                {t('order')} #{selectedOrder.orderNumber || selectedOrder.id.substring(0, 6)}
               </h3>
               <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
-                <Clock size={12} /> {formatDate(selectedOrder.createdAt)}
+                <Clock size={12} /> {formatDate(selectedOrder.createdAt, lang)}
               </p>
             </div>
-            <button 
-              onClick={() => setSelectedOrderId(null)} 
+            <button
+              onClick={() => setSelectedOrderId(null)}
               className="text-xs text-indigo-600 font-bold hover:underline"
             >
               {t('backToList')}
@@ -86,7 +97,7 @@ export const MyReceipts: React.FC<MyReceiptsProps> = ({ lang, activeOrderId, onB
             {selectedOrder.deliveryData?.address && (
               <div className="flex items-start gap-2 mb-3 text-xs text-slate-600 dark:text-slate-400">
                 <MapPin size={14} className="mt-0.5 shrink-0 text-slate-400" />
-                <span>{safeText(selectedOrder.deliveryData.address)}</span>
+                <span>{safeText(selectedOrder.deliveryData.address, lang)}</span>
               </div>
             )}
             {selectedOrder.deliveryData?.phone && (
@@ -97,9 +108,9 @@ export const MyReceipts: React.FC<MyReceiptsProps> = ({ lang, activeOrderId, onB
             )}
 
             <ul className="space-y-2 mb-4">
-              {Array.isArray(selectedOrder.items) && selectedOrder.items.map((item: any, idx: number) => (
-                <li key={idx} className="flex justify-between text-sm text-slate-700 dark:text-slate-300">
-                  <span>{safeText(item.name || item.nameAr, 'Item')} x{item.quantity || 1}</span>
+              {selectedOrder.items.map((item: OrderItem, idx: number) => (
+                <li key={item.id ?? `${item.menuItemId ?? 'item'}-${idx}`} className="flex justify-between text-sm text-slate-700 dark:text-slate-300">
+                  <span>{safeText(item.name || item.nameAr, lang, 'Item')} x{item.quantity || 1}</span>
                   <span className="font-bold">
                     {((item.price || 0) * (item.quantity || 1)).toLocaleString()} {t('currency')}
                   </span>
@@ -124,7 +135,7 @@ export const MyReceipts: React.FC<MyReceiptsProps> = ({ lang, activeOrderId, onB
         </div>
       ) : (
         <div className="space-y-3">
-          {myOrders.map((order: any) => (
+          {myOrders.map((order: Order) => (
             <button
               key={order.id}
               onClick={() => setSelectedOrderId(order.id)}
@@ -133,10 +144,10 @@ export const MyReceipts: React.FC<MyReceiptsProps> = ({ lang, activeOrderId, onB
               <div className="flex justify-between items-start mb-2">
                 <div>
                   <h3 className="font-bold text-sm text-slate-800 dark:text-white">
-                    {t('order')} #{order.orderNumber || order.id?.substring(0, 6)}
+                    {t('order')} #{order.orderNumber || order.id.substring(0, 6)}
                   </h3>
                   <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
-                    <Clock size={10} /> {formatDate(order.createdAt)}
+                    <Clock size={10} /> {formatDate(order.createdAt, lang)}
                   </p>
                 </div>
                 <span className="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-lg">

@@ -1,4 +1,4 @@
- import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../../../firebase';
 import { collection, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, query, where } from 'firebase/firestore';
 import { ClipboardCheck, Plus, Calendar, AlertCircle, CheckCircle2, ArrowDownRight } from 'lucide-react';
@@ -29,7 +29,7 @@ interface StockTakeRecord {
   difference: number;
   unit: string;
   status: string;
-  date: any;
+  date: string;
   restaurantId?: string;
 }
 
@@ -41,11 +41,9 @@ export const StockTake: React.FC<StockTakeProps> = (props) => {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [records, setRecords] = useState<StockTakeRecord[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
-  
   const [selectedItemId, setSelectedItemId] = useState('');
   const [actualQty, setActualQty] = useState<number>(0);
 
-  // 1. جلب المواد الخام المتوفرة من المخزن الخاص بالمطعم الحالي فقط
   useEffect(() => {
     const restaurantId = localStorage.getItem('restaurantId');
     if (!restaurantId) return;
@@ -57,18 +55,20 @@ export const StockTake: React.FC<StockTakeProps> = (props) => {
     return () => unsubscribe();
   }, []);
 
-  // 2. جلب سجلات الجرد الخاصة بالمطعم الحالي فقط
   useEffect(() => {
     const restaurantId = localStorage.getItem('restaurantId');
     if (!restaurantId) return;
 
-    const localeMap = { ar: 'ar-DZ', fr: 'fr-FR', en: 'en-US' };
+    const localeMap: Record<Language, string> = { ar: 'ar-DZ', fr: 'fr-FR', en: 'en-US' };
     const q = query(collection(db, 'stock_take'), where('restaurantId', '==', restaurantId));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(docSnap => {
         const docData = docSnap.data();
-        const dateObj = docData.createdAt?.toDate ? docData.createdAt.toDate() : new Date();
+        const createdAt = docData.createdAt;
+        const dateObj = createdAt && typeof createdAt.toDate === 'function'
+          ? createdAt.toDate()
+          : new Date();
 
         return {
           id: docSnap.id,
@@ -81,7 +81,6 @@ export const StockTake: React.FC<StockTakeProps> = (props) => {
     return () => unsubscribe();
   }, [lang]);
 
-  // 3. تسجيل عملية جرد جديدة مع ربطها بمعرف المطعم الحالي
   const handleAddStockTake = async (e: React.FormEvent) => {
     e.preventDefault();
     const restaurantId = localStorage.getItem('restaurantId');
@@ -96,12 +95,11 @@ export const StockTake: React.FC<StockTakeProps> = (props) => {
     const itemName = selectedItem.itemName || selectedItem.name || '—';
     const systemQty = selectedItem.currentQuantity ?? selectedItem.quantity ?? 0;
     const difference = actualQty - systemQty;
-    
+
     let status = t.statuses.normal;
     if (difference < 0) status = t.statuses.deficit;
     if (difference > 0) status = t.statuses.surplus;
 
-    // تسجيل في جدول الجرد مع restaurantId
     await addDoc(collection(db, 'stock_take'), {
       restaurantId,
       itemName,
@@ -113,14 +111,13 @@ export const StockTake: React.FC<StockTakeProps> = (props) => {
       createdAt: serverTimestamp()
     });
 
-    // تحديث الكمية الفعلية في المخزن الأصلي مباشرة
     const inventoryRef = doc(db, 'inventory', selectedItem.id);
     await updateDoc(inventoryRef, {
       currentQuantity: Number(actualQty),
       quantity: Number(actualQty),
       updatedAt: serverTimestamp()
     });
-      setSelectedItemId('');
+    setSelectedItemId('');
     setActualQty(0);
     setShowAddModal(false);
   };
@@ -149,10 +146,8 @@ export const StockTake: React.FC<StockTakeProps> = (props) => {
               {records.filter(r => r.status === t.statuses.deficit || r.status === 'عجز في المخزن').length} {t.operationsUnit}
             </p>
           </div>
-          <span className="p-3 bg-red-50 text-red-500 rounded-xl">
-            <ArrowDownRight size={20} />
-          </span>
-        </div> 
+          <span className="p-3 bg-red-50 text-red-500 rounded-xl"><ArrowDownRight size={20} /></span>
+        </div>
         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs text-slate-400 font-bold">{t.successfulMatchingStats}</p>
@@ -160,9 +155,7 @@ export const StockTake: React.FC<StockTakeProps> = (props) => {
               {records.filter(r => r.status === t.statuses.normal || r.status === 'طبيعي').length} {t.operationsUnit}
             </p>
           </div>
-          <span className="p-3 bg-green-50 text-green-500 rounded-xl">
-            <CheckCircle2 size={20} />
-          </span>
+          <span className="p-3 bg-green-50 text-green-500 rounded-xl"><CheckCircle2 size={20} /></span>
         </div>
       </div>
 
@@ -170,48 +163,23 @@ export const StockTake: React.FC<StockTakeProps> = (props) => {
         <table className={`w-full border-collapse ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-sm">
-              <th className="p-4">{t.tableItemName}</th>
-              <th className="p-4">{t.tableSystemQty}</th>
-              <th className="p-4">{t.tableActualQty}</th>
-              <th className="p-4">{t.tableDifference}</th>
-              <th className="p-4">{t.tableDate}</th>
-              <th className="p-4">{t.tableStatus}</th>
+              <th className="p-4">{t.tableItemName}</th><th className="p-4">{t.tableSystemQty}</th><th className="p-4">{t.tableActualQty}</th>
+              <th className="p-4">{t.tableDifference}</th><th className="p-4">{t.tableDate}</th><th className="p-4">{t.tableStatus}</th>
             </tr>
           </thead>
           <tbody className="text-slate-700 text-sm divide-y divide-slate-100">
             {records.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-slate-400 italic">{t.emptyState}</td>
+              <tr><td colSpan={6} className="p-8 text-center text-slate-400 italic">{t.emptyState}</td></tr>
+            ) : records.map((record) => (
+              <tr key={record.id} className="hover:bg-slate-50/50 transition">
+                <td className="p-4 font-bold text-slate-800 flex items-center gap-2"><ClipboardCheck size={16} className="text-indigo-500 shrink-0" /><span>{record.itemName}</span></td>
+                <td className="p-4 text-slate-500">{record.systemQty} {record.unit}</td>
+                <td className="p-4 font-semibold text-slate-800">{record.actualQty} {record.unit}</td>
+                <td className={`p-4 font-bold ${record.difference < 0 ? 'text-red-600' : record.difference > 0 ? 'text-blue-600' : 'text-green-600'}`}>{record.difference > 0 ? `+${record.difference}` : record.difference} {record.unit}</td>
+                <td className="p-4 text-slate-400 border-none"><span className="flex items-center gap-1.5"><Calendar size={13} className="shrink-0" /><span>{record.date}</span></span></td>
+                <td className="p-4"><span className={`px-2.5 py-1 rounded-full text-xs font-bold ${record.status === t.statuses.normal || record.status === 'طبيعي' ? 'bg-green-50 text-green-700' : record.status === t.statuses.surplus || record.status === 'فائض' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'}`}>{record.status}</span></td>
               </tr>
-            ) : (
-              records.map((record) => (
-                <tr key={record.id} className="hover:bg-slate-50/50 transition">
-                  <td className="p-4 font-bold text-slate-800 flex items-center gap-2">
-                    <ClipboardCheck size={16} className="text-indigo-500 shrink-0" />
-                    <span>{record.itemName}</span>
-                  </td>
-                  <td className="p-4 text-slate-500">{record.systemQty} {record.unit}</td>
-                  <td className="p-4 font-semibold text-slate-800">{record.actualQty} {record.unit}</td>
-                  <td className={`p-4 font-bold ${record.difference < 0 ? 'text-red-600' : record.difference > 0 ? 'text-blue-600' : 'text-green-600'}`}>
-                    {record.difference > 0 ? `+${record.difference}` : record.difference} {record.unit}
-                  </td>
-                  <td className="p-4 text-slate-400 border-none">
-                  <span className="flex items-center gap-1.5">
-                      <Calendar size={13} className="shrink-0" />
-                      <span>{record.date}</span>
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                      record.status === t.statuses.normal || record.status === 'طبيعي' ? 'bg-green-50 text-green-700' :
-                      record.status === t.statuses.surplus || record.status === 'فائض' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'
-                    }`}>
-                      {record.status}
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
       </div>
@@ -220,52 +188,25 @@ export const StockTake: React.FC<StockTakeProps> = (props) => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <form onSubmit={handleAddStockTake} className="bg-white p-6 rounded-2xl max-w-md w-full shadow-2xl space-y-4" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
             <h3 className="font-bold text-lg border-b pb-2 text-slate-800">{t.modalTitle}</h3>
-            
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalItemLabel}</label>
-              <select
-                required
-                value={selectedItemId}
-                onChange={(e) => setSelectedItemId(e.target.value)}
-                className="w-full p-2.5 border rounded-xl text-sm"
-              >
+              <select required value={selectedItemId} onChange={(e) => setSelectedItemId(e.target.value)} className="w-full p-2.5 border rounded-xl text-sm">
                 <option value="">{t.selectPlaceholder}</option>
                 {inventoryItems.map(item => {
                   const name = item.itemName || item.name || '—';
                   const qty = item.currentQuantity ?? item.quantity ?? 0;
-                  return (
-                    <option key={item.id} value={item.id}>
-                      {name} ({t.currentRegisteredHint} {qty} {item.unit || 'كجم'})
-                    </option>
-                  );
+                  return <option key={item.id} value={item.id}>{name} ({t.currentRegisteredHint} {qty} {item.unit || 'كجم'})</option>;
                 })}
               </select>
             </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalActualQtyLabel}</label>
-              <input
-                type="number"
-                required
-                value={actualQty}
-                onChange={(e) => setActualQty(Number(e.target.value))}
-                className="w-full p-2.5 border rounded-xl text-sm"
-                placeholder={t.modalActualQtyPlaceholder}
-              />
+              <input type="number" required value={actualQty} onChange={(e) => setActualQty(Number(e.target.value))} className="w-full p-2.5 border rounded-xl text-sm" placeholder={t.modalActualQtyPlaceholder} />
             </div>
-
-            <div className="bg-amber-50 p-3 rounded-xl flex gap-2 text-amber-800 text-xs leading-relaxed">
-              <AlertCircle size={16} className="shrink-0 mt-0.5" />
-              <p>{t.modalInfoNote}</p>
-            </div>
-
+            <div className="bg-amber-50 p-3 rounded-xl flex gap-2 text-amber-800 text-xs leading-relaxed"><AlertCircle size={16} className="shrink-0 mt-0.5" /><p>{t.modalInfoNote}</p></div>
             <div className="flex gap-3 pt-2">
-              <button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-xl transition text-sm">
-                {t.confirmBtn}
-              </button>
-              <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl transition text-sm">
-                {t.cancelBtn}
-              </button>
+              <button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-xl transition text-sm">{t.confirmBtn}</button>
+              <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl transition text-sm">{t.cancelBtn}</button>
             </div>
           </form>
         </div>

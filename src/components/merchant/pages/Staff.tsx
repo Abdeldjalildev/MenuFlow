@@ -24,6 +24,17 @@ interface StaffMember {
   loginMethod?: 'email' | 'phone';
 }
 
+interface StaffForm {
+  name: string;
+  role: string;
+  phone: string;
+  email: string;
+  password: string;
+  loginMethod: 'phone' | 'email';
+  salary: number;
+  status: 'active' | 'inactive';
+}
+
 export const Staff: React.FC<StaffProps> = (props) => {
   const outletContext = useOutletContext<{ lang: Language; restaurantId?: string }>() || {};
   const lang = props.lang || outletContext.lang || 'ar';
@@ -32,31 +43,26 @@ export const Staff: React.FC<StaffProps> = (props) => {
 
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [paidStatus, setPaidStatus] = useState<{ [key: string]: boolean }>({});
-  
-// حالة نموذج إضافة موظف جديد تدعم الاختيار بين الإيميل أو الهاتف مع كلمة المرور
-  const [newStaff, setNewStaff] = useState({
+  const [paidStatus, setPaidStatus] = useState<Record<string, boolean>>({});
+
+  // Keep the stored role value language-independent for routing and permissions.
+  const createInitialStaff = (): StaffForm => ({
     name: '',
-    role: 'Kitchen', // 👈 توحيد القيمة الافتراضية برمجياً
+    role: 'Kitchen',
     phone: '',
     email: '',
     password: '',
-    loginMethod: 'phone' as 'phone' | 'email',
+    loginMethod: 'phone',
     salary: 0,
-    status: 'active' as 'active' | 'inactive'
+    status: 'active'
   });
 
+  const [newStaff, setNewStaff] = useState<StaffForm>(createInitialStaff);
 
-
-useEffect(() => {
-    // نحافظ على القيمة البرمجية 'kitchen' وثباتها بغض النظر عن لغة الواجهة
-    setNewStaff(prev => ({ ...prev, role: 'Kitchen' }));
-  }, [lang]);
-
-  // جلب الموظفين الخاصين بهذا المطعم حصرياً لضمان عزل البيانات
+  // Fetch staff members for this restaurant only.
   useEffect(() => {
     if (!restaurantId) return;
-    
+
     const q = query(collection(db, 'staff'), where('restaurantId', '==', restaurantId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setStaff(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as StaffMember)));
@@ -69,27 +75,23 @@ useEffect(() => {
     if (!newStaff.name || !newStaff.phone || !newStaff.password) return;
 
     try {
-      // توليد إيميل وهمي ثابت من رقم الهاتف
       const cleanPhone = newStaff.phone.replace(/\s+/g, '').replace(/[^0-9]/g, '');
       const authEmail = `${cleanPhone}@restaurant-staff.local`;
 
-      // 1. إنشاء الحساب في Firebase
       const userCredential = await createUserWithEmailAndPassword(auth, authEmail, newStaff.password);
-      
-      // 🎯 تحديد وتوحيد قيمة الدور (role) لتتوافق مع نظام التوجيه
-      const roleLower = String(newStaff.role).toLowerCase();
+
+      const roleLower = newStaff.role.toLowerCase();
       const normalizedRole = roleLower.includes('cashier') ? 'cashier'
         : roleLower.includes('delivery') ? 'delivery'
         : roleLower.includes('waiter') ? 'waiter'
         : 'Kitchen';
 
-      // 2. حفظ البيانات في Firestore
       await addDoc(collection(db, 'staff'), {
         uid: userCredential.user.uid,
         name: newStaff.name,
-        role: normalizedRole, // 👈 حفظ الدور بصيغة برمجية موحدة وصحيحة للتوجيه
-        phone: newStaff.phone, // نحفظ رقم الهاتف الحقيقي
-        loginMethod: 'phone', // نثبتها على هاتف
+        role: normalizedRole,
+        phone: newStaff.phone,
+        loginMethod: 'phone',
         salary: Number(newStaff.salary || 0),
         status: 'active',
         restaurantId: restaurantId,
@@ -97,26 +99,15 @@ useEffect(() => {
       });
 
       setShowAddModal(false);
-      
-      // 👈 تفريغ الفورم بعد النجاح مع إعادة تعيين الدور للقيمة البرمجية الصحيحة
-      setNewStaff({
-        name: '',
-        role: 'Kitchen',
-        phone: '',
-        email: '',
-        password: '',
-        loginMethod: 'phone',
-        salary: 0,
-        status: 'active'
-      });
+      setNewStaff(createInitialStaff());
 
       alert(lang === 'ar' ? 'تم إضافة الموظف بنجاح!' : 'Staff member added successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       alert(lang === 'ar' ? 'حدث خطأ أثناء إضافة الموظف' : 'Error adding staff');
     }
   };
-  // دالة صرف الراتب وربطه المباشر بالمصاريف والتقارير
+
   const handlePaySalary = async (member: StaffMember) => {
     if (member.salary <= 0) {
       alert(t.noSalaryAlert || 'No salary specified');
@@ -126,10 +117,12 @@ useEffect(() => {
     const confirmMsg = (t.confirmPaySalary || 'Pay salary for {name}?')
       .replace('{name}', member.name)
       .replace('{salary}', member.salary.toLocaleString());
-      
+
     if (window.confirm(confirmMsg)) {
       try {
-        const titleText = (t.expenseTitle || 'Salary: {name}').replace('{name}', member.name).replace('{role}', member.role);
+        const titleText = (t.expenseTitle || 'Salary: {name}')
+          .replace('{name}', member.name)
+          .replace('{role}', member.role);
         const notesText = (t.expenseNotes || 'Phone: {phone}').replace('{phone}', member.phone);
 
         await addDoc(collection(db, 'expenses'), {
@@ -140,11 +133,11 @@ useEffect(() => {
           restaurantId: restaurantId,
           createdAt: serverTimestamp()
         });
-        
+
         setPaidStatus(prev => ({ ...prev, [member.id]: true }));
         alert((t.salaryPaidSuccess || 'Salary paid successfully for {name}').replace('{name}', member.name));
-      } catch (error) {
-        console.error("خطأ أثناء صرف الراتب:", error);
+      } catch (error: unknown) {
+        console.error('خطأ أثناء صرف الراتب:', error);
       }
     }
   };
@@ -164,7 +157,7 @@ useEffect(() => {
 
   return (
     <div className="space-y-6" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      {/* الهيدر وزر الإضافة */}
+      {/* Header and add button */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">{t.title || 'Staff Management'}</h1>
@@ -179,7 +172,7 @@ useEffect(() => {
         </button>
       </div>
 
-      {/* بطاقات الإحصاء السريع */}
+      {/* Quick statistics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
           <div>
@@ -198,7 +191,8 @@ useEffect(() => {
           </div>
           <span className="p-3 bg-green-50 text-green-500 rounded-xl">🟢</span>
         </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs text-slate-400">{t.monthlySalariesStats || 'Total Salaries'}</p>
             <p className="text-2xl font-bold text-amber-600 mt-1">
@@ -211,7 +205,7 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* جدول البيانات المطور */}
+      {/* Staff table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <table className={`w-full border-collapse ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
           <thead>
@@ -244,14 +238,14 @@ useEffect(() => {
                     </span>
                   </td>
                   <td className="p-4 text-slate-600 text-xs font-medium">
-                    {member.loginMethod === 'email' 
-                      ? (lang === 'ar' ? 'البريد الإلكتروني' : 'Email') 
+                    {member.loginMethod === 'email'
+                      ? (lang === 'ar' ? 'البريد الإلكتروني' : 'Email')
                       : (lang === 'ar' ? 'رقم الهاتف' : 'Phone')}
                   </td>
                   <td className="p-4" dir="ltr">{member.phone}</td>
                   <td className="p-4 font-bold text-slate-800">{Number(member.salary || 0).toLocaleString()} {t.currency || 'DZD'}</td>
                   <td className="p-4">
-                    <button 
+                    <button
                       onClick={() => toggleStatus(member.id, member.status)}
                       className="flex items-center gap-1 transition"
                     >
@@ -266,7 +260,7 @@ useEffect(() => {
                       )}
                     </button>
                   </td>
-                   <td className="p-4 text-center">
+                  <td className="p-4 text-center">
                     <button
                       onClick={() => handlePaySalary(member)}
                       disabled={paidStatus[member.id]}
@@ -302,109 +296,74 @@ useEffect(() => {
         </table>
       </div>
 
-        {showAddModal && (
+      {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <form onSubmit={handleAddStaff} className="bg-white p-6 rounded-2xl max-w-sm w-full shadow-2xl space-y-3.5" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-            <h3 className="font-bold text-lg text-slate-800 pb-1 border-b">
-              {lang === 'ar' ? 'إضافة موظف جديد' : 'Add New Staff'}
-            </h3>
+            <h3 className="font-bold text-lg text-slate-800 pb-1 border-b">{t.addModalTitle || 'Add New Staff'}</h3>
 
-            {/* الاسم الكامل */}
+            <input
+              type="text"
+              placeholder={t.namePlaceholder || 'Full name'}
+              value={newStaff.name}
+              onChange={(e) => setNewStaff(prev => ({ ...prev, name: e.target.value }))}
+              className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
+              required
+            />
+
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                {lang === 'ar' ? 'الاسم الكامل' : 'Full Name'}
-              </label>
+              <label className="text-xs font-semibold text-slate-500 mb-1 block">{t.roleLabel || 'Role'}</label>
+              <select
+                value={newStaff.role}
+                onChange={(e) => setNewStaff(prev => ({ ...prev, role: e.target.value }))}
+                className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="Kitchen">{t.roles?.kitchen || 'Kitchen'}</option>
+                <option value="Waiter">{t.roles?.waiter || 'Waiter'}</option>
+                <option value="Cashier">{t.roles?.cashier || 'Cashier'}</option>
+                <option value="Delivery">{t.roles?.delivery || 'Delivery'}</option>
+              </select>
+            </div>
+
+            <div className="relative">
+              <Phone size={16} className="absolute top-3 left-3 text-slate-400" />
               <input
-                type="text"
+                type="tel"
+                placeholder={t.phonePlaceholder || 'Phone number'}
+                value={newStaff.phone}
+                onChange={(e) => setNewStaff(prev => ({ ...prev, phone: e.target.value }))}
+                className="w-full p-2.5 pl-9 border rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
                 required
-                autoComplete="off"
-                placeholder={lang === 'ar' ? 'مثال: محمد الأمين' : 'e.g. John Doe'}
-                value={newStaff.name}
-                onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })}
-                className="w-full p-2.5 border rounded-xl text-sm"
               />
             </div>
 
-            {/* رقم الهاتف */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                {lang === 'ar' ? 'رقم الهاتف' : 'Phone Number'}
-              </label>
-              <div className="relative">
-                <Phone size={16} className="absolute left-3 top-3 text-slate-400" />
-                <input
-                  type="tel"
-                  required
-                  autoComplete="off"
-                  name="staff_phone_number_unique"
-                  placeholder="0550000000"
-                  value={newStaff.phone}
-                  onChange={(e) => setNewStaff({ ...newStaff, phone: e.target.value })}
-                  className="w-full p-2.5 pl-9 border rounded-xl text-sm text-left"
-                  dir="ltr"
-                />
-              </div>
+            <div className="relative">
+              <Lock size={16} className="absolute top-3 left-3 text-slate-400" />
+              <input
+                type="password"
+                placeholder={t.passwordPlaceholder || 'Password'}
+                value={newStaff.password}
+                onChange={(e) => setNewStaff(prev => ({ ...prev, password: e.target.value }))}
+                className="w-full p-2.5 pl-9 border rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
+                required
+                minLength={6}
+              />
             </div>
 
-            {/* كلمة المرور */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                {lang === 'ar' ? 'كلمة المرور' : 'Password'}
-              </label>
-              <div className="relative">
-                <Lock size={16} className="absolute left-3 top-3 text-slate-400" />
-                <input
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  name="staff_secret_password_unique"
-                  placeholder="••••••••"
-                  value={newStaff.password}
-                  onChange={(e) => setNewStaff({ ...newStaff, password: e.target.value })}
-                  className="w-full p-2.5 pl-9 border rounded-xl text-sm text-left"
-                  dir="ltr"
-                />
-              </div>
-            </div>
+            <input
+              type="number"
+              min="0"
+              placeholder={t.salaryPlaceholder || 'Monthly salary'}
+              value={newStaff.salary}
+              onChange={(e) => setNewStaff(prev => ({ ...prev, salary: Number(e.target.value) || 0 }))}
+              className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
+            />
 
-            {/* الراتب والوظيفة */}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  {lang === 'ar' ? 'الراتب الشهري (دج)' : 'Monthly Salary'}
-                </label>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={newStaff.salary}
-                  onChange={(e) => setNewStaff({ ...newStaff, salary: Number(e.target.value) })}
-                  className="w-full p-2.5 border rounded-xl text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  {lang === 'ar' ? 'الوظيفة' : 'Role'}
-                </label>
-                <select 
-                  value={newStaff.role} 
-                  onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })}
-                  className="w-full p-2.5 border rounded-xl text-sm bg-white"
-                  >
-                  <option value="Chef">{lang === 'ar' ? 'طباخ (Chef)' : 'Chef'}</option>
-                  <option value="Cashier">{lang === 'ar' ? 'كاشير (Cashier)' : 'Cashier'}</option>
-                  <option value="Waiter">{lang === 'ar' ? 'نادل (Waiter)' : 'Waiter'}</option>
-                  <option value="Delivery">{lang === 'ar' ? 'عامل توصيل (Delivery)' : 'Delivery'}</option>
-                </select>
-              </div>
-            </div>
-
-            {/* أزرار الحفظ والإلغاء */}
             <div className="flex gap-2 pt-2">
-              <button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-xl text-sm transition">
-                {lang === 'ar' ? 'حفظ' : 'Save'}
+              <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-600 font-semibold">
+                {t.cancelButton || 'Cancel'}
               </button>
-              <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl text-sm transition">
-                {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+              <button type="submit" className="flex-1 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold">
+                {t.saveButton || 'Save'}
               </button>
             </div>
           </form>

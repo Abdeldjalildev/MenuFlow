@@ -1,4 +1,4 @@
-import { useMenu as useProviderMenu } from './MenuProvider';
+import { createContext, useContext } from 'react';
 
 export interface LocalizedText {
   ar: string;
@@ -30,23 +30,14 @@ export interface MenuContextType {
   restaurantId: string;
 }
 
-type ProviderMenuValue = {
-  menuItems: MenuItem[];
-  themeColor: string;
-  currentTable: string;
-  setCurrentTable: (tableNum: string) => void;
-  restaurantId: string;
-};
+export const MenuContext = createContext<MenuContextType | undefined>(undefined);
 
-// Expose the provider-backed menu contract to existing consumers without creating a second React context.
 export const useMenu = (): MenuContextType => {
-  const context = useProviderMenu() as ProviderMenuValue;
+  const context = useContext(MenuContext);
 
-  return {
-    menuItems: context.menuItems,
-    themeColor: context.themeColor,
-    currentTable: context.currentTable,
-    setTable: context.setCurrentTable,
-    restaurantId: context.restaurantId,
-  };
+  if (!context) {
+    throw new Error('useMenu must be used within a MenuProvider');
+  }
+
+  return context;
 };
