@@ -43,7 +43,7 @@ const DEFAULT_THEME: ThemeConfig = {
 };
 
 export const CustomerMenu: React.FC = () => {
-  const { menuItems, themeColor, currentTable, setTable } = useMenu();
+  const { menuItems, themeColor, currentTable } = useMenu();
   const { orders, placeOrder, appendToOrder } = useContext(OrderContext);
   const { cart, notes, handleAddToCart, updateNote, cartCount, clearCart } = useCart();
   const [searchParams] = useSearchParams();
