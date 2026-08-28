@@ -42,6 +42,15 @@ interface InventoryItem {
   unit?: string;
 }
 
+interface Category {
+  id: string;
+  restaurantId?: string;
+  ar?: string;
+  fr?: string;
+  en?: string;
+  createdAt?: unknown;
+}
+
 export const Recipes: React.FC<RecipesProps> = (props) => {
   const outletContext = useOutletContext<{ lang: Language }>() || {};
   const lang = props.lang || outletContext.lang || 'ar';
@@ -76,7 +85,7 @@ export const Recipes: React.FC<RecipesProps> = (props) => {
   const [newCatAr, setNewCatAr] = useState('');
   const [newCatFr, setNewCatFr] = useState('');
   const [newCatEn, setNewCatEn] = useState('');
-  const [categoriesList, setCategoriesList] = useState<any[]>([]);
+  const [categoriesList, setCategoriesList] = useState<Category[]>([]);
 
   const handleAddIngredientRow = () => {
     setNewRecipe(prev => ({
@@ -100,11 +109,6 @@ export const Recipes: React.FC<RecipesProps> = (props) => {
     });
   };
 
-  useEffect(() => {
-    if (t?.categories?.main) {
-      setNewRecipe(prev => ({ ...prev, category: t.categories.main }));
-    }
-  }, [lang, t?.categories?.main]);
 
   useEffect(() => {
     const q = query(collection(db, 'recipes'), where('restaurantId', '==', restaurantId));

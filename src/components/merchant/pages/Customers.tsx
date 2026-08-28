@@ -111,19 +111,12 @@ export const Customers: React.FC<CustomersProps> = (props) => {
         if (!key) return;
 
         const rawName = order.customerName || order.deliveryData?.name || '';
-        let realName = '';
-
-        if (!rawName || rawName.includes('طاولة #') || rawName.startsWith('طاولة')) {
-          if (tableName && tableName !== '0') {
-            const shortCode = custId ? custId.slice(-4) : order.id.slice(-4);
-            realName = `زبون طاولة #${tableName} (${shortCode})`;
-          } else {
-            const shortCode = custId ? custId.slice(-4) : 'خارجي';
-            realName = `زبون (${shortCode})`;
-          }
-        } else {
-          realName = rawName;
-        }
+        const realName =
+        !rawName || rawName.includes('طاولة #') || rawName.startsWith('طاولة')
+        ? tableName && tableName !== '0'
+        ? `زبون طاولة #${tableName} (${custId ? custId.slice(-4) : order.id.slice(-4)})`
+        : `زبون (${custId ? custId.slice(-4) : 'خارجي'})`
+         : rawName;
 
         if (customersMap.has(key)) {
           const existing = customersMap.get(key)!;

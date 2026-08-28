@@ -1,6 +1,5 @@
 import React, { createContext, useState, useContext } from 'react';
 
-/* eslint-disable react-refresh/only-export-components */
 
 // Cart line item shape with notes and pricing
 export interface CartItem {
