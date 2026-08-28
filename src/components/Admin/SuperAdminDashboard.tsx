@@ -98,11 +98,52 @@ export const SuperAdminDashboard: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (authorized) {
-      void fetchRestaurants();
+ useEffect(() => {
+  if (!authorized) return;
+
+  const loadRestaurants = async () => {
+    if (!isCurrentSuperAdmin()) return;
+
+    setLoading(true);
+
+    try {
+      const querySnapshot = await getDocs(collection(db, 'restaurants'));
+
+      const list: RestaurantRecord[] = querySnapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        let planFormatted = data.plan as string | undefined;
+
+        if (data.plan === 'yearly') planFormatted = 'سنوي (1 Year)';
+        else if (data.plan === 'quarterly') planFormatted = '3 أشهر (Quarterly)';
+        else if (data.plan === 'monthly') planFormatted = 'شهري (Monthly)';
+
+        const rawStatus: RestaurantStatus =
+          data.status === 'suspended' ? 'suspended' : 'active';
+
+        return {
+          id: docSnap.id,
+          name: data.name,
+          owner: data.owner,
+          email: data.email,
+          plan: planFormatted || '',
+          status:
+            rawStatus === 'suspended'
+              ? 'معطل (Suspended)'
+              : 'نشط (Active)',
+          rawStatus,
+        };
+      });
+
+      setRestaurantsList(list);
+    } catch (error) {
+      console.error('Error fetching restaurants:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [authorized]);
+  };
+
+  void loadRestaurants();
+}, [authorized]);
 
   const handleToggleSuspend = async (
     restaurantId: string,

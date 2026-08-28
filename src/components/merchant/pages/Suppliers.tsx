@@ -24,13 +24,6 @@ interface Supplier {
   restaurantId?: string;
 }
 
-interface InventoryUpdateData {
-  currentQuantity: ReturnType<typeof increment>;
-  supplierName: string;
-  updatedAt: ReturnType<typeof serverTimestamp>;
-  minQuantity?: number;
-  minOrderQuantity?: number;
-}
 
 export const Suppliers: React.FC<SuppliersProps> = (props) => {
   const outletContext = useOutletContext<{ lang: Language }>() || {};
@@ -139,18 +132,19 @@ export const Suppliers: React.FC<SuppliersProps> = (props) => {
           const existingDoc = querySnapshot.docs[0];
           const itemDocRef = doc(db, 'inventory', existingDoc.id);
 
-          const updatePayload: InventoryUpdateData = {
-            currentQuantity: increment(quantityToAdd),
-            supplierName: newSupplier.companyName,
-            updatedAt: serverTimestamp()
-          };
+       const updatePayload = {
+      currentQuantity: increment(quantityToAdd),
+      supplierName: newSupplier.companyName,
+      updatedAt: serverTimestamp(),
+      ...(newSupplier.minOrderQuantity > 0
+       ? {
+        minQuantity: Number(newSupplier.minOrderQuantity),
+        minOrderQuantity: Number(newSupplier.minOrderQuantity),
+      }
+    : {}),
+};
 
-          if (newSupplier.minOrderQuantity > 0) {
-            updatePayload.minQuantity = Number(newSupplier.minOrderQuantity);
-            updatePayload.minOrderQuantity = Number(newSupplier.minOrderQuantity);
-          }
-
-          await updateDoc(itemDocRef, updatePayload);
+await updateDoc(itemDocRef, updatePayload);
         } else {
           await addDoc(inventoryRef, {
             restaurantId,

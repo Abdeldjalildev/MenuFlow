@@ -82,12 +82,17 @@ export const CustomerMenu: React.FC = () => {
   };
 
   // Fetch theme and visual identity settings from Firestore with full restaurant isolation
-  useEffect(() => {
-    const fetchTheme = async () => {
-      try {
-        const currentRestaurantId = getRestaurantId();
-        
-        const themeDoc = await getDoc(doc(db, 'restaurants', currentRestaurantId, 'settings', 'theme'));
+useEffect(() => {
+  const fetchTheme = async () => {
+    try {
+      const currentRestaurantId =
+        searchParams.get('restaurantId') ||
+        localStorage.getItem('restaurantId') ||
+        'default_restaurant';
+
+      const themeDoc = await getDoc(
+        doc(db, 'restaurants', currentRestaurantId, 'settings', 'theme')
+      );
         
         if (themeDoc.exists()) {
           const data = themeDoc.data();
