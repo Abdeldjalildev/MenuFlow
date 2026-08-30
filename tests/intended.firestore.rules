@@ -1,0 +1,190 @@
+rules_version = '2';
+
+// Test-only target authorization model. Production firestore.rules is unchanged.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return signedIn() ? request.auth.token.role : null;
+    }
+
+    function isSuperAdmin() {
+      return role() == 'SuperAdmin';
+    }
+
+    function isTenantRole(restaurantId, allowedRoles) {
+      return signedIn()
+        && request.auth.token.restaurantId == restaurantId
+        && role() in allowedRoles;
+    }
+
+    function isTenantAdmin(restaurantId) {
+      return isTenantRole(restaurantId, ['Admin']);
+    }
+
+    function isTenantOperator(restaurantId) {
+      return isTenantRole(
+        restaurantId,
+        ['Admin', 'Cashier', 'Kitchen', 'Delivery']
+      );
+    }
+
+    function isAnonymousCustomer() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    function ownsOrder(restaurantId, orderId) {
+      return get(
+        /databases/$(database)/documents/restaurants/$(restaurantId)/orders/$(orderId)
+      ).data.customerId == request.auth.uid;
+    }
+
+    function isValidOrder(restaurantId) {
+      return request.resource.data.keys().hasAll([
+          'restaurantId', 'customerId', 'items', 'tableNumber', 'status', 'totalAmount'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'customerId', 'items', 'tableNumber', 'status', 'totalAmount',
+          'customerName', 'customerPhone', 'deliveryAddress', 'deliveryData', 'createdAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.items is list
+        && request.resource.data.tableNumber is string
+        && request.resource.data.status == 'pending'
+        && request.resource.data.totalAmount is number;
+    }
+
+    function isValidFeedback(restaurantId) {
+      return request.resource.data.keys().hasAll([
+          'restaurantId', 'orderId', 'rating', 'message'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'orderId', 'rating', 'message', 'createdAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.orderId is string
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.message is string
+        && ownsOrder(restaurantId, request.resource.data.orderId);
+    }
+
+    function isValidStaff(restaurantId) {
+      return request.resource.data.keys().hasAll([
+          'restaurantId', 'uid', 'name', 'role', 'phone', 'salary', 'status'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'uid', 'name', 'role', 'phone', 'email', 'salary', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.uid is string
+        && request.resource.data.name is string
+        && request.resource.data.role in ['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery']
+        && request.resource.data.phone is string
+        && request.resource.data.salary is number
+        && request.resource.data.status in ['active', 'inactive'];
+    }
+
+    match /restaurants/{restaurantId} {
+      // A publicly readable restaurant document must contain only non-sensitive
+      // storefront metadata. Owner credentials and billing data belong elsewhere.
+      allow get: if true;
+      allow list: if false;
+      allow create, update, delete: if isSuperAdmin();
+
+      match /settings/theme {
+        allow read: if true;
+        allow write: if isTenantAdmin(restaurantId);
+      }
+
+      match /settings/operational {
+        allow read, write: if isTenantAdmin(restaurantId);
+      }
+
+      match /settings/loyalty {
+        allow read, write: if isTenantAdmin(restaurantId);
+      }
+
+      match /menuItems/{menuItemId} {
+        allow read: if true;
+        allow write: if isTenantAdmin(restaurantId);
+      }
+
+      match /categories/{categoryId} {
+        allow read: if true;
+        allow write: if isTenantAdmin(restaurantId);
+      }
+
+      match /qrConfig/default {
+        allow read, write: if isTenantAdmin(restaurantId);
+      }
+
+      match /staff/{staffId} {
+        allow get: if isTenantAdmin(restaurantId)
+          || (isTenantOperator(restaurantId) && resource.data.uid == request.auth.uid);
+        allow list: if isTenantAdmin(restaurantId);
+        allow create: if isTenantAdmin(restaurantId) && isValidStaff(restaurantId);
+        allow update: if isTenantAdmin(restaurantId)
+          && resource.data.restaurantId == request.resource.data.restaurantId
+          && isValidStaff(restaurantId);
+        allow delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /orders/{orderId} {
+        allow create: if isAnonymousCustomer() && isValidOrder(restaurantId);
+        allow read, update, delete: if isTenantOperator(restaurantId);
+      }
+
+      match /inventory/{inventoryItemId} {
+        allow read: if isTenantRole(restaurantId, ['Admin', 'Kitchen']);
+        allow write: if isTenantAdmin(restaurantId);
+      }
+
+      match /recipes/{recipeId} {
+        allow read: if isTenantRole(restaurantId, ['Admin', 'Kitchen']);
+        allow write: if isTenantAdmin(restaurantId);
+      }
+
+      match /customers/{customerId} {
+        allow read, write: if isTenantRole(restaurantId, ['Admin', 'Cashier']);
+      }
+
+      match /reviews/{reviewId} {
+        allow create: if isAnonymousCustomer() && isValidFeedback(restaurantId);
+        allow read, update, delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /complaints/{complaintId} {
+        allow create: if isAnonymousCustomer() && isValidFeedback(restaurantId);
+        allow read, update, delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /expenses/{expenseId} {
+        allow read, write: if isTenantAdmin(restaurantId);
+      }
+
+      match /suppliers/{supplierId} {
+        allow read, write: if isTenantAdmin(restaurantId);
+      }
+
+      match /stockTakes/{stockTakeId} {
+        allow read, write: if isTenantAdmin(restaurantId);
+      }
+
+      match /wasteLogs/{wasteLogId} {
+        allow read, write: if isTenantAdmin(restaurantId);
+      }
+
+      match /{document=**} {
+        allow read, write: if isSuperAdmin();
+      }
+    }
+  }
+}
