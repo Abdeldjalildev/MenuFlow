@@ -2,38 +2,45 @@
 
 ## Scope
 
-This document records the Phase 2 security work that is actually evidenced in the repository. The repository does not contain a canonical numbered gate manifest for Gates 12–15, so gate numbers below are mapped to the Phase 2 security objectives and confirmed findings in `AGENTS.md` rather than invented acceptance criteria.
+This document records the Phase 2 security work that is actually evidenced in the repository. Gate numbers are mapped to the Phase 2 security objectives and confirmed findings in `AGENTS.md` rather than invented acceptance criteria.
 
 ## Gate 12 — Canonical role vocabulary and typed authorization boundary
 
 **Status: IMPLEMENTED in the application authorization boundary.**
 
-- `src/types/firestore.ts` defines the canonical role union and `STAFF_ROLES` list:
-  - `SuperAdmin`
-  - `Admin`
-  - `Cashier`
-  - `Kitchen`
-  - `Delivery`
+- `src/types/firestore.ts` defines the canonical role union and `STAFF_ROLES` list.
 - `src/services/authClaims.ts` centralizes parsing of signed Firebase authorization claims.
-- Invalid or missing roles are rejected by the helper instead of being normalized into a privileged role.
+- Invalid or missing roles are rejected instead of being normalized into a privileged role.
 - Tenant roles require a string `restaurantId` claim; `SuperAdmin` is the only role without a tenant claim requirement.
 
 ## Gate 13 — Server-authoritative authentication/authorization source
 
-**Status: PARTIAL / BLOCKED FOR FINAL PRODUCTION CUTOVER.**
+**Status: IMPLEMENTED IN REPOSITORY; PRODUCTION DEPLOYMENT VERIFICATION STILL REQUIRED.**
 
-Implemented in this gate pass:
-- `src/pages/auth/Login.tsx` now obtains authorization only through `getAuthzClaims(user)` after Firebase sign-in.
-- The hard-coded SuperAdmin email privilege branch has been removed.
-- Login no longer derives `userRole` or `restaurantId` from Firestore documents.
-- Login now fails closed and signs the user out when the signed Firebase claims are missing or invalid.
-- Browser `localStorage` values are retained only as presentation/cache state; they are not used to grant access.
-- `tests/auth-authorization-boundary.test.mjs` adds regression checks against reintroducing client-side role authority.
-- `package.json` includes the authorization-boundary regression test in the normal `npm test` command.
+Repository work completed in this pass:
+- Added `functions/index.js` with a Firebase Functions v2 callable `provisionAuthzClaims`.
+- The function uses the Firebase Admin SDK to write signed `role` and `restaurantId` custom claims.
+- Unauthenticated callers are rejected.
+- Invalid roles are rejected.
+- Tenant roles require a non-empty `restaurantId`.
+- Only an existing SuperAdmin may provision SuperAdmin claims.
+- Tenant Admins may provision only Cashier/Kitchen/Delivery roles inside their own tenant.
+- Cross-tenant provisioning is rejected.
+- The target Firebase Auth account must exist before claims are changed.
+- Claim decisions are recorded server-side in `authz_claim_audit`.
+- `src/components/Admin/AddRestaurantModal.tsx` now keeps the administrator in the primary Auth session, creates the new owner through the secondary provisioning Auth instance, creates the restaurant record, and asks the trusted function to provision the new owner as `Admin` for that restaurant.
+- Failure cleanup removes the restaurant document and provisioned Auth account where applicable.
+- `src/firebase.ts` now exports the initialized Firebase app so the callable Functions client can share the configured project.
+- Added `tests/auth-claims-provisioning.test.mjs` to prevent regression toward client-side claim authority.
+- The normal `npm test` command includes the new Gate 13 regression suite.
+- `firebase.json` now registers the `functions` source directory.
+- `functions/README.md` documents bootstrap, deployment, and security constraints.
 
-Confirmed blocker:
-- The repository still contains no trusted backend/function implementation that provisions the `role` and `restaurantId` custom claims. `AGENTS.md` explicitly identifies this as a confirmed baseline issue.
-- Therefore a production claim cutover cannot honestly be declared complete from repository-only evidence. The next action is to establish and deploy the trusted claim-provisioning boundary with the real Firebase project/deployment constraints, then verify real authenticated users receive the claims.
+Important production boundary:
+- The repository identifies the configured Firebase project as `menuflow-c02e5` in `src/firebase.ts`; the repository cannot prove that this is the intended production deployment solely from source code.
+- The initial SuperAdmin remains an explicit bootstrap operation because allowing the callable itself to create the first SuperAdmin would create a circular trust dependency.
+- The Functions dependency lockfile has not been generated in this repository yet. It must be generated with the intended npm/tooling before a production deployment is considered complete.
+- A real deployment and real-user ID-token refresh/verification are still required before declaring the production trust boundary fully verified.
 
 ## Gate 14 — Authentication session isolation during provisioning
 
@@ -42,14 +49,15 @@ Confirmed blocker:
 - `src/components/Admin/AddRestaurantModal.tsx` uses a named secondary Firebase App/Auth instance (`restaurant-provisioning`) to create the new restaurant account.
 - The primary administrator Auth session is not used to create the new account.
 - The provisioning session is explicitly signed out in `finally`.
-- A failure path attempts cleanup of the newly created Auth user without signing out the administrator.
+- Failure cleanup attempts to remove the provisioned Auth account without signing out the administrator.
+- Restaurant-document cleanup is also attempted when the provisioning workflow fails after the document is created.
 
 ## Gate 15 — Public customer write abuse/schema hardening
 
 **Status: IMPLEMENTED IN THE TEST-ONLY TARGET RULESET; PRODUCTION CUTOVER PENDING.**
 
 Implemented/expanded:
-- Anonymous customer writes remain restricted to anonymous Firebase Auth.
+- Anonymous customer writes remain restricted to anonymous Firebase Auth in the intended target rules.
 - Order tenant path and document tenant must agree.
 - Customer identity is bound to `request.auth.uid`.
 - Unknown order fields are rejected.
@@ -61,30 +69,33 @@ Implemented/expanded:
 - Additional regression coverage is in `tests/firestore-public-write-validation.test.mjs`.
 
 Important limitation:
-- Firestore Security Rules cannot generically enforce the type/schema of every member of an arbitrary list. The current target rules therefore validate the order's `items` field as a bounded list but do not pretend to fully validate every nested item without a schema redesign/backend mediation. This limitation is explicitly acknowledged rather than hidden.
-- The hardened rules are intentionally in `tests/intended.firestore.rules`; production `firestore.rules` remains unchanged because the repository's schema/caller migration and trusted-claims provisioning are not yet complete. This is deliberate and follows the project engineering contract.
+- Firestore Security Rules cannot generically enforce the type/schema of every member of an arbitrary list. The current target rules therefore validate the order's `items` field as a bounded list but do not pretend to fully validate every nested item without a schema redesign/backend mediation.
+- The hardened rules remain in `tests/intended.firestore.rules`; production `firestore.rules` remains unchanged because the repository's full schema/caller migration and trusted-claims deployment verification are not yet complete. This is deliberate.
 
 ## Verification state
 
-Repository-side changes from this pass were committed directly to `automation/ci-pipeline` because the GitHub contents workflow commits file edits atomically. The local environment must still verify the resulting branch with:
+The last local run reported **21 tests passed, 0 failed** for the Firestore security suite. The new Gate 13 static regression suite requires a fresh local run after synchronization.
 
-- `npm ci` (or `npm install` followed by `npm ci` if lockfile synchronization requires it)
+Required local verification before Phase 2 closure:
+
+- `npm ci`
 - `npm test`
 - `npm run lint`
 - `npm run build`
 - `git diff --check`
+- Functions dependency installation/build/deploy using the intended Firebase project
+- Real authenticated-user claim verification after token refresh
+- Production rules cutover only after schema/caller reconciliation
 
-The existing Firestore security suite previously passed 21/21 tests locally after the expanded public-write validation work. The new auth-boundary static regression suite and the newly added Gate 15 cases require a fresh local run.
+## Exact remaining Gate 13 work
 
-## Gate 13 production blocker — exact remaining work
-
-1. Confirm the actual Firebase project used for production.
-2. Establish a trusted claim-provisioning mechanism (Firebase Admin SDK via an approved backend/function/deployment boundary).
-3. Define who is allowed to assign each role and tenant claim; never allow arbitrary browser input to set privileged claims.
-4. Provision `role` and `restaurantId` claims from trusted server-side data.
-5. Force/verify ID-token refresh after provisioning where required.
-6. Test real authenticated staff accounts against the production rules contract.
-7. Only after those checks, migrate production `firestore.rules` from the legacy contract to the hardened target contract.
+1. Generate and commit `functions/package-lock.json` using the intended npm version.
+2. Confirm `menuflow-c02e5` is the intended production Firebase project.
+3. Deploy `functions/provisionAuthzClaims` through the controlled Firebase deployment process.
+4. Perform the initial SuperAdmin bootstrap outside the browser through a controlled Admin operation.
+5. Verify a real tenant owner receives `{ role: 'Admin', restaurantId: '<tenant>' }` in a refreshed ID token.
+6. Verify a tenant Admin cannot provision Admin/SuperAdmin or cross-tenant claims.
+7. Only after those checks, proceed to Gate 15 production Rules cutover.
 
 ## Golden rule applied
 
