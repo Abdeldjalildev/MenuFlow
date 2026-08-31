@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { X, Store, Mail, User, CreditCard, Lock } from 'lucide-react';
 import { adminTranslations } from '../../utils/translations/AdminTranslations';
-import { db, auth } from '../../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth, app } from '../../firebase';
+import { collection, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { deleteUser, getAuth, signOut } from 'firebase/auth';
 import { getApp, getApps, initializeApp } from 'firebase/app';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 interface RestaurantFormData {
   name: string;
@@ -52,6 +53,7 @@ export const AddRestaurantModal: React.FC<AddRestaurantModalProps> = ({
 
     const provisioningAuth = getProvisioningAuth();
     let createdUser = provisioningAuth.currentUser;
+    let restaurantId: string | null = null;
 
     try {
       // Create the restaurant owner's account without replacing the SuperAdmin session.
@@ -60,7 +62,7 @@ export const AddRestaurantModal: React.FC<AddRestaurantModalProps> = ({
       );
       createdUser = userCredential.user;
 
-      await addDoc(collection(db, 'restaurants'), {
+      const restaurantRef = await addDoc(collection(db, 'restaurants'), {
         uid: createdUser.uid,
         name: formData.name,
         owner: formData.owner,
@@ -68,6 +70,18 @@ export const AddRestaurantModal: React.FC<AddRestaurantModalProps> = ({
         plan: formData.plan,
         status: 'active',
         createdAt: serverTimestamp(),
+      });
+      restaurantId = restaurantRef.id;
+
+      // Claims are assigned by the trusted Firebase Function using the primary
+      // administrator session. The newly created account never becomes the
+      // caller of this authorization operation.
+      const functions = getFunctions(app);
+      const provisionAuthzClaims = httpsCallable(functions, 'provisionAuthzClaims');
+      await provisionAuthzClaims({
+        uid: createdUser.uid,
+        role: 'Admin',
+        restaurantId,
       });
 
       const safeRestaurantData: Omit<RestaurantFormData, 'password'> = {
@@ -81,6 +95,14 @@ export const AddRestaurantModal: React.FC<AddRestaurantModalProps> = ({
       onClose();
     } catch (error: unknown) {
       console.error('Error adding restaurant:', error);
+
+      if (restaurantId) {
+        try {
+          await deleteDoc(doc(db, 'restaurants', restaurantId));
+        } catch (cleanupError) {
+          console.error('Failed to clean up the provisioned restaurant:', cleanupError);
+        }
+      }
 
       if (createdUser && createdUser.uid !== auth.currentUser?.uid) {
         try {
