@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "npm run test:rules",
-    "test:rules": "firebase emulators:exec --project demo-menuflow-rules-test --only firestore \"node --test --test-concurrency=1 tests/firestore-rules.test.mjs\"",
+    "test:rules": "firebase emulators:exec --project demo-menuflow-rules-test --only firestore \"node --test --test-concurrency=1 tests/firestore-rules.test.mjs tests/firestore-public-write-validation.test.mjs\"",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -19,7 +19,6 @@
     "framer-motion": "^12.42.2",
     "html2canvas": "^1.4.1",
     "html5-qrcode": "^2.3.8",
-    "jspdf": "^4.2.1",
     "lucide-react": "^1.23.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.7",
