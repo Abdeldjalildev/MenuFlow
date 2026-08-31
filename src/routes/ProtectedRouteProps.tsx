@@ -3,15 +3,12 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
 import type { StaffRole } from '../types/firestore';
-import { STAFF_ROLES } from '../types/firestore';
+import { getAuthzClaims } from '../services/authClaims';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: StaffRole[];
 }
-
-const isStaffRole = (value: unknown): value is StaffRole =>
-  typeof value === 'string' && STAFF_ROLES.includes(value as StaffRole);
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
   const [authState, setAuthState] = useState<{
@@ -33,11 +30,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
       }
 
       try {
-        const tokenResult = await user.getIdTokenResult();
-        const role = isStaffRole(tokenResult.claims.role) ? tokenResult.claims.role : null;
+        const claims = await getAuthzClaims(user);
 
         if (active) {
-          setAuthState({ ready: true, authenticated: true, role });
+          setAuthState({
+            ready: true,
+            authenticated: true,
+            role: claims?.role ?? null,
+          });
         }
       } catch (error) {
         console.error('Failed to read the authenticated user claims:', error);
