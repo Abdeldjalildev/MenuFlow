@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { db, auth } from '../../firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { auth } from '../../firebase';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, Globe, Phone } from 'lucide-react';
+import { getAuthzClaims } from '../../services/authClaims';
 
 // Determine the browser's default language
 const getBrowserLanguage = (): 'ar' | 'fr' | 'en' => {
@@ -62,55 +62,31 @@ export const Login: React.FC = () => {
       }
 
       const userCredential = await signInWithEmailAndPassword(auth, authEmail, password);
-      const firebaseUid = userCredential.user.uid;
-      localStorage.setItem('userId', firebaseUid);
+      const user = userCredential.user;
+      const claims = await getAuthzClaims(user);
 
-      if (authEmail === 'abdeldjalilkhalfa2@gmail.com') {
-        localStorage.setItem('userRole', 'SuperAdmin');
-        localStorage.setItem('userName', 'Abdeljalil Khalfa');
-        navigate('/super-admin');
-        return;
+      // Authorization must come only from Firebase's signed ID-token claims.
+      // Browser storage below is presentation/cache state and is never used
+      // to grant access to a protected route or privileged operation.
+      if (!claims) {
+        await signOut(auth);
+        throw new Error(t.staffNotFound);
       }
 
-      let staffQuery;
-      if (loginMethod === 'phone') {
-        staffQuery = query(collection(db, 'staff'), where('phone', '==', inputValue.trim()));
+      localStorage.setItem('userId', user.uid);
+      localStorage.setItem('userRole', claims.role);
+      if (claims.restaurantId) {
+        localStorage.setItem('restaurantId', claims.restaurantId);
       } else {
-        staffQuery = query(collection(db, 'staff'), where('email', '==', authEmail));
+        localStorage.removeItem('restaurantId');
       }
+      localStorage.setItem('userName', user.displayName || inputValue.trim());
 
-      let querySnapshot = await getDocs(staffQuery);
-
-      if (querySnapshot.empty && loginMethod === 'phone') {
-        const fallbackQuery = query(collection(db, 'staff'), where('email', '==', authEmail));
-        querySnapshot = await getDocs(fallbackQuery);
-      }
-
-      if (!querySnapshot.empty) {
-        const staffData = querySnapshot.docs[0].data();
-
-        localStorage.setItem('restaurantId', staffData.restaurantId);
-        localStorage.setItem('userRole', staffData.role);
-        localStorage.setItem('userName', staffData.name);
-
-        if (staffData.role === 'Admin') navigate('/merchant/overview');
-        else if (staffData.role === 'Cashier') navigate('/cashier');
-        else if (staffData.role === 'Kitchen') navigate('/kitchen');
-        else navigate('/delivery');
-      } else {
-        const restaurantQuery = query(collection(db, 'restaurants'), where('email', '==', authEmail));
-        const restSnapshot = await getDocs(restaurantQuery);
-
-        if (!restSnapshot.empty) {
-          const restData = restSnapshot.docs[0].data();
-          localStorage.setItem('restaurantId', restSnapshot.docs[0].id);
-          localStorage.setItem('userRole', 'Admin');
-          localStorage.setItem('userName', restData.owner || restData.name);
-          navigate('/merchant/overview');
-        } else {
-          throw new Error(t.staffNotFound);
-        }
-      }
+      if (claims.role === 'SuperAdmin') navigate('/super-admin');
+      else if (claims.role === 'Admin') navigate('/merchant/overview');
+      else if (claims.role === 'Cashier') navigate('/cashier');
+      else if (claims.role === 'Kitchen') navigate('/kitchen');
+      else navigate('/delivery');
     } catch {
       setError(t.errorMsg);
     } finally {
