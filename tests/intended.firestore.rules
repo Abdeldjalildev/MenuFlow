@@ -1,8 +1,8 @@
 rules_version = '2';
 
-// Test-only target authorization model for Phase 1 Gate 3.
-// Production firestore.rules is intentionally unchanged and is never loaded by
-// this test configuration.
+// Test-only target authorization model for Phase 2 security validation.
+// Production firestore.rules is intentionally unchanged until the trusted
+// claims provisioning and data-path cutover are complete.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
@@ -51,6 +51,11 @@ service cloud.firestore {
         && (!data.keys().hasAny(['updatedAt']) || data.updatedAt is timestamp);
     }
 
+    function validOptionalString(data, field, maxLength) {
+      return !data.keys().hasAny([field])
+        || (data.get(field, '') is string && data.get(field, '').size() <= maxLength);
+    }
+
     function isValidOrder(restaurantId) {
       return request.resource.data.keys().hasAll([
           'restaurantId', 'customerId', 'items', 'tableNumber', 'status', 'totalAmount'
@@ -63,9 +68,18 @@ service cloud.firestore {
         && request.resource.data.restaurantId == restaurantId
         && request.resource.data.customerId == request.auth.uid
         && request.resource.data.items is list
+        && request.resource.data.items.size() <= 50
         && request.resource.data.tableNumber is string
+        && request.resource.data.tableNumber.size() > 0
+        && request.resource.data.tableNumber.size() <= 32
         && request.resource.data.status == 'pending'
         && request.resource.data.totalAmount is number
+        && request.resource.data.totalAmount >= 0
+        && validOptionalString(request.resource.data, 'customerName', 120)
+        && validOptionalString(request.resource.data, 'customerPhone', 40)
+        && validOptionalString(request.resource.data, 'deliveryAddress', 500)
+        && validOptionalString(request.resource.data, 'driverId', 128)
+        && validOptionalString(request.resource.data, 'driverName', 120)
         && validTimestampFields(request.resource.data);
     }
 
@@ -76,10 +90,13 @@ service cloud.firestore {
         ])
         && request.resource.data.restaurantId == restaurantId
         && request.resource.data.orderId is string
+        && request.resource.data.orderId.size() > 0
+        && request.resource.data.orderId.size() <= 128
         && request.resource.data.rating is number
         && request.resource.data.rating >= 1
         && request.resource.data.rating <= 5
         && request.resource.data.get('comment', '') is string
+        && request.resource.data.get('comment', '').size() <= 1000
         && validTimestampFields(request.resource.data)
         && ownsOrder(restaurantId, request.resource.data.orderId);
     }
@@ -92,10 +109,15 @@ service cloud.firestore {
         ])
         && request.resource.data.restaurantId == restaurantId
         && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 2000
         && request.resource.data.status == 'pending'
         && request.resource.data.get('orderId', '') is string
+        && request.resource.data.get('orderId', '').size() <= 128
         && request.resource.data.get('customerName', '') is string
+        && request.resource.data.get('customerName', '').size() <= 120
         && request.resource.data.get('customerPhone', '') is string
+        && request.resource.data.get('customerPhone', '').size() <= 40
         && request.resource.data.get('rating', 0) is number
         && request.resource.data.get('rating', 0) >= 0
         && request.resource.data.get('rating', 0) <= 5
