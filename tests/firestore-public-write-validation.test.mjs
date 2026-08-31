@@ -87,6 +87,31 @@ test('anonymous orders reject negative totals and oversized carts', async () => 
   );
 });
 
+test('anonymous orders reject invalid core field types and unknown fields', async () => {
+  const db = anonymousCustomer();
+
+  await assertFails(
+    setDoc(
+      tenantDoc(db, RESTAURANT_A, 'orders', 'string-total'),
+      validOrder({ totalAmount: '1200' }),
+    ),
+  );
+
+  await assertFails(
+    setDoc(
+      tenantDoc(db, RESTAURANT_A, 'orders', 'non-list-items'),
+      validOrder({ items: {} }),
+    ),
+  );
+
+  await assertFails(
+    setDoc(
+      tenantDoc(db, RESTAURANT_A, 'orders', 'unknown-field'),
+      validOrder({ privilegedDiscount: 100 }),
+    ),
+  );
+});
+
 test('anonymous orders reject oversized table and contact fields', async () => {
   const db = anonymousCustomer();
   const oversized = 'x'.repeat(501);
@@ -121,6 +146,17 @@ test('anonymous reviews reject oversized comments while valid reviews remain all
   );
 });
 
+test('anonymous reviews reject invalid rating types', async () => {
+  const db = anonymousCustomer();
+
+  await assertFails(
+    setDoc(
+      tenantDoc(db, RESTAURANT_A, 'reviews', 'string-rating'),
+      validReview({ rating: '5' }),
+    ),
+  );
+});
+
 test('anonymous complaints reject empty or oversized messages', async () => {
   const db = anonymousCustomer();
 
@@ -135,6 +171,24 @@ test('anonymous complaints reject empty or oversized messages', async () => {
     setDoc(
       tenantDoc(db, RESTAURANT_A, 'complaints', 'oversized-complaint'),
       validComplaint({ message: 'x'.repeat(2001) }),
+    ),
+  );
+});
+
+test('anonymous complaints reject invalid rating and message types', async () => {
+  const db = anonymousCustomer();
+
+  await assertFails(
+    setDoc(
+      tenantDoc(db, RESTAURANT_A, 'complaints', 'string-rating'),
+      validComplaint({ rating: '5' }),
+    ),
+  );
+
+  await assertFails(
+    setDoc(
+      tenantDoc(db, RESTAURANT_A, 'complaints', 'object-message'),
+      validComplaint({ message: { text: 'invalid' } }),
     ),
   );
 });
