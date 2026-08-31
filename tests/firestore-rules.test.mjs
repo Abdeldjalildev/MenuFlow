@@ -224,8 +224,8 @@ test('anonymous customers can create orders only for the tenant encoded by the d
 
   await assertFails(
     setDoc(
-      tenantDoc(db, RESTAURANT_B, 'orders', 'wrong-owner-order'),
-      validOrder(RESTAURANT_B, CUSTOMER_A),
+      tenantDoc(db, RESTAURANT_B, 'orders', 'wrong-tenant-order-reverse'),
+      validOrder(RESTAURANT_A, CUSTOMER_A),
     ),
   );
 });
