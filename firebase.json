@@ -1,7 +1,4 @@
 {
-  "firestore": {
-    "rules": "tests/intended.firestore.rules"
-  },
   "emulators": {
     "firestore": {
       "port": 8080
