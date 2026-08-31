@@ -7,13 +7,6 @@ initializeApp();
 
 const ALLOWED_ROLES = new Set(['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery']);
 const TENANT_ROLES = new Set(['Admin', 'Cashier', 'Kitchen', 'Delivery']);
-const ROLE_RANK = {
-  Delivery: 10,
-  Kitchen: 10,
-  Cashier: 10,
-  Admin: 20,
-  SuperAdmin: 30,
-};
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
 
