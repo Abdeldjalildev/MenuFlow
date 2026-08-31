@@ -2,23 +2,22 @@ import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, getIdTokenResult } from 'firebase/auth';
 import { auth } from '../firebase';
-
-type StaffRole = 'SuperAdmin' | 'Admin' | 'Cashier' | 'Kitchen' | 'Delivery';
+import {
+  parseTrustedAuthzClaims,
+  roleDestination,
+  type MenuFlowRole,
+} from '../services/authz';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: StaffRole[];
+  allowedRoles?: MenuFlowRole[];
 }
 
 interface AuthzState {
   loading: boolean;
   authenticated: boolean;
-  role: StaffRole | null;
+  role: MenuFlowRole | null;
 }
-
-const isStaffRole = (value: unknown): value is StaffRole =>
-  typeof value === 'string' &&
-  ['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery'].includes(value);
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
@@ -44,12 +43,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
       try {
         const tokenResult = await getIdTokenResult(user);
-        const role = isStaffRole(tokenResult.claims.role)
-          ? tokenResult.claims.role
-          : null;
+        const trustedClaims = parseTrustedAuthzClaims(tokenResult.claims);
 
         if (mounted) {
-          setAuthz({ loading: false, authenticated: true, role });
+          setAuthz({
+            loading: false,
+            authenticated: trustedClaims !== null,
+            role: trustedClaims?.role ?? null,
+          });
         }
       } catch (error) {
         console.error('Unable to verify Firebase authorization claims:', error);
@@ -78,10 +79,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   if (allowedRoles && !allowedRoles.includes(authz.role)) {
-    if (authz.role === 'SuperAdmin') {
-      return <Navigate to="/super-admin" replace />;
-    }
-    return <Navigate to="/merchant/overview" replace />;
+    return <Navigate to={roleDestination(authz.role)} replace />;
   }
 
   return <>{children}</>;
