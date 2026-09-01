@@ -1,0 +1,31 @@
+name: Phase 2 Production Verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      restaurant_id:
+        description: 'Production restaurant ID used for the canary order'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify-production-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Verify production customer boundary
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_RESTAURANT_ID: ${{ inputs.restaurant_id }}
+        run: npm run test:phase2:production
