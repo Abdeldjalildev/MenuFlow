@@ -30,6 +30,8 @@ jobs:
           test -n "$FIREBASE_SERVICE_ACCOUNT"
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-service-account.json" >> "$GITHUB_ENV"
+      - name: Deploy trusted-claims function
+        run: firebase deploy --only functions:provisionAuthzClaims --project menuflow-c02e5 --non-interactive
       - name: Deploy production Firestore rules
         run: firebase deploy --only firestore:rules --project menuflow-c02e5 --non-interactive
       - name: Verify production customer boundary
