@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document records the Phase 2 security work that is actually evidenced in the repository. Gate numbers are mapped to the Phase 2 security objectives and confirmed findings in `AGENTS.md` rather than invented acceptance criteria.
+This document records the Phase 2 security work that is actually evidenced in the repository and by the latest local verification. Gate numbers are mapped to the Phase 2 security objectives and confirmed findings in `AGENTS.md` rather than invented acceptance criteria.
 
 ## Gate 12 — Canonical role vocabulary and typed authorization boundary
 
@@ -17,8 +17,8 @@ This document records the Phase 2 security work that is actually evidenced in th
 
 **Status: IMPLEMENTED IN REPOSITORY; PRODUCTION DEPLOYMENT VERIFICATION STILL REQUIRED.**
 
-Repository work completed in this pass:
-- Added `functions/index.js` with a Firebase Functions v2 callable `provisionAuthzClaims`.
+Repository work completed:
+- `functions/index.js` exposes a Firebase Functions v2 callable `provisionAuthzClaims`.
 - The function uses the Firebase Admin SDK to write signed `role` and `restaurantId` custom claims.
 - Unauthenticated callers are rejected.
 - Invalid roles are rejected.
@@ -28,25 +28,25 @@ Repository work completed in this pass:
 - Cross-tenant provisioning is rejected.
 - The target Firebase Auth account must exist before claims are changed.
 - Claim decisions are recorded server-side in `authz_claim_audit`.
-- `src/components/Admin/AddRestaurantModal.tsx` now keeps the administrator in the primary Auth session, creates the new owner through the secondary provisioning Auth instance, creates the restaurant record, and asks the trusted function to provision the new owner as `Admin` for that restaurant.
+- `AddRestaurantModal.tsx` keeps the administrator in the primary Auth session, uses a secondary provisioning Auth instance for the new owner, and delegates trusted claim assignment to the callable function.
 - Failure cleanup removes the restaurant document and provisioned Auth account where applicable.
-- `src/firebase.ts` now exports the initialized Firebase app so the callable Functions client can share the configured project.
-- Added `tests/auth-claims-provisioning.test.mjs` to prevent regression toward client-side claim authority.
-- The normal `npm test` command includes the new Gate 13 regression suite.
-- `firebase.json` now registers the `functions` source directory.
-- `functions/README.md` documents bootstrap, deployment, and security constraints.
+- `src/firebase.ts` exports the initialized Firebase app for the callable Functions client.
+- `tests/auth-claims-provisioning.test.mjs` protects the trusted-claims boundary.
+- `npm test` includes the Gate 13 regression suite.
+- `firebase.json` registers the `functions` source directory.
+- `functions/package-lock.json` is now present in the repository and has been successfully installed locally with `npm ci`.
 
-Important production boundary:
-- The repository identifies the configured Firebase project as `menuflow-c02e5` in `src/firebase.ts`; the repository cannot prove that this is the intended production deployment solely from source code.
-- The initial SuperAdmin remains an explicit bootstrap operation because allowing the callable itself to create the first SuperAdmin would create a circular trust dependency.
-- The Functions dependency lockfile has not been generated in this repository yet. It must be generated with the intended npm/tooling before a production deployment is considered complete.
-- A real deployment and real-user ID-token refresh/verification are still required before declaring the production trust boundary fully verified.
+Production boundary still outstanding:
+- The repository identifies Firebase project `menuflow-c02e5` in `src/firebase.ts`, but source code alone does not prove that this is the intended production project.
+- The initial SuperAdmin must remain an explicit controlled bootstrap operation.
+- A real deployment of `provisionAuthzClaims` and a real-user ID-token refresh/verification have not been evidenced by repository state.
+- The latest local Functions install reported an `EBADENGINE` warning because the local runtime is Node 24 while `functions/package.json` requires Node 20. The Functions code passed `node --check`, but production deployment verification should use the declared Node 20 runtime.
 
 ## Gate 14 — Authentication session isolation during provisioning
 
 **Status: IMPLEMENTED.**
 
-- `src/components/Admin/AddRestaurantModal.tsx` uses a named secondary Firebase App/Auth instance (`restaurant-provisioning`) to create the new restaurant account.
+- `AddRestaurantModal.tsx` uses a named secondary Firebase App/Auth instance (`restaurant-provisioning`) to create the new restaurant account.
 - The primary administrator Auth session is not used to create the new account.
 - The provisioning session is explicitly signed out in `finally`.
 - Failure cleanup attempts to remove the provisioned Auth account without signing out the administrator.
@@ -54,48 +54,59 @@ Important production boundary:
 
 ## Gate 15 — Public customer write abuse/schema hardening
 
-**Status: IMPLEMENTED IN THE TEST-ONLY TARGET RULESET; PRODUCTION CUTOVER PENDING.**
+**Status: TARGET RULESET IMPLEMENTED; PRODUCTION CUTOVER BLOCKED BY SCHEMA/CALLER MIGRATION.**
 
-Implemented/expanded:
-- Anonymous customer writes remain restricted to anonymous Firebase Auth in the intended target rules.
-- Order tenant path and document tenant must agree.
-- Customer identity is bound to `request.auth.uid`.
-- Unknown order fields are rejected.
-- Order status is restricted to `pending` at creation.
-- Order cart size, table number, total amount, and selected contact fields have bounded validation.
-- Order core field types are regression-tested, including non-list `items` and string `totalAmount` rejection.
-- Review ratings/comments and complaint messages are bounded and validated.
-- Review/complaint ownership continues to be checked against the authenticated customer's order.
-- Additional regression coverage is in `tests/firestore-public-write-validation.test.mjs`.
+The hardened target rules are regression-tested in `tests/intended.firestore.rules` and cover:
+- anonymous Firebase Auth as the customer write identity;
+- tenant binding between the authenticated request and the document path;
+- customer ownership for reviews/complaints;
+- strict field allowlists and bounded field sizes/types;
+- order status restricted to `pending` at creation;
+- bounded cart/table/total fields;
+- review rating/comment validation;
+- complaint message/status validation.
 
-Important limitation:
-- Firestore Security Rules cannot generically enforce the type/schema of every member of an arbitrary list. The current target rules therefore validate the order's `items` field as a bounded list but do not pretend to fully validate every nested item without a schema redesign/backend mediation.
-- The hardened rules remain in `tests/intended.firestore.rules`; production `firestore.rules` remains unchanged because the repository's full schema/caller migration and trusted-claims deployment verification are not yet complete. This is deliberate.
+**Critical blocker discovered during Phase 2 closure verification:** the target rules test a nested schema such as `restaurants/{restaurantId}/orders/{orderId}`, while the current application `OrderProvider` still reads/writes top-level `orders/{orderId}` and derives customer identity from the browser-controlled `localStorage` key `menu_customer_id`. The same migration gap affects the customer review/complaint flow. Deploying the target rules as-is would therefore break legitimate customer writes and/or leave the current callers outside the intended authorization contract.
 
-## Verification state
+This is not a documentation-only issue. The remaining work requires a coordinated caller/data-path migration, including Firebase anonymous authentication for customer writes, followed by production Rules cutover and regression testing. No production Rules replacement should be performed before that migration is complete.
 
-The last local run reported **21 tests passed, 0 failed** for the Firestore security suite. The new Gate 13 static regression suite requires a fresh local run after synchronization.
+## Latest local verification
 
-Required local verification before Phase 2 closure:
+The latest local verification on `automation/ci-pipeline` established:
 
-- `npm ci`
-- `npm test`
-- `npm run lint`
-- `npm run build`
-- `git diff --check`
-- Functions dependency installation/build/deploy using the intended Firebase project
-- Real authenticated-user claim verification after token refresh
-- Production rules cutover only after schema/caller reconciliation
+- `npm ci`: passed.
+- `npm run build`: passed.
+- `npm run lint`: passed.
+- `npm test`: passed — 24 Firestore security tests and 10 auth-claims regression tests, 34 total, 0 failures.
+- `functions/npm ci`: passed, with the Node 24 vs Node 20 engine warning noted above.
+- `node --check functions/index.js`: passed.
+- `git diff --check`: passed.
 
-## Exact remaining Gate 13 work
+The build still reports non-blocking Vite warnings about ineffective Firebase dynamic imports and a large minified application chunk (~2.78 MB). These are Phase 3 performance concerns, not reasons to weaken the security boundary.
 
-1. Generate and commit `functions/package-lock.json` using the intended npm version.
-2. Confirm `menuflow-c02e5` is the intended production Firebase project.
-3. Deploy `functions/provisionAuthzClaims` through the controlled Firebase deployment process.
-4. Perform the initial SuperAdmin bootstrap outside the browser through a controlled Admin operation.
-5. Verify a real tenant owner receives `{ role: 'Admin', restaurantId: '<tenant>' }` in a refreshed ID token.
-6. Verify a tenant Admin cannot provision Admin/SuperAdmin or cross-tenant claims.
-7. Only after those checks, proceed to Gate 15 production Rules cutover.
+`npm audit --omit=optional` currently reports 10 vulnerabilities in the frontend dependency graph (5 moderate, 5 high), including a high-severity `react-router` advisory. `npm audit fix --force` must **not** be used blindly because npm reports that it would introduce a breaking `firebase-tools` downgrade. Dependency remediation should be handled as a controlled change rather than as an automatic Phase 2 closure step.
+
+## Phase 2 closure decision
+
+**Phase 2 is NOT CLOSED yet.** The repository has a substantially stronger security foundation, and the automated regression barrier is green, but a false "closed" status would be unsafe because:
+
+1. Gate 13 still lacks production deployment and real-user claim verification evidence.
+2. Gate 15's hardened target Rules use a data-path/identity contract that the current customer callers have not yet migrated to.
+3. Production Rules have therefore intentionally not been cut over.
+4. The current audit report contains high-severity dependency findings that require controlled remediation/acceptance.
+
+## Exact next closure sequence
+
+1. Keep the current green CI/security baseline unchanged.
+2. Migrate customer order/review/complaint callers to Firebase anonymous Auth and the canonical tenant-scoped Firestore paths without changing user-visible behavior.
+3. Expand the regression suite against the migrated caller contract.
+4. Deploy `provisionAuthzClaims` using the declared Node 20 runtime and intended Firebase project.
+5. Perform the controlled initial SuperAdmin bootstrap.
+6. Verify refreshed real-user claims for a tenant owner and verify tenant-admin denial cases against the deployed callable.
+7. Cut production Firestore Rules over only after the caller migration is proven compatible.
+8. Run the complete regression barrier again.
+9. Reassess the remaining npm audit findings and remediate/record accepted residual risk without `npm audit fix --force`.
+10. Only then mark Phase 2 closed and open Phase 3 for selective refactoring/performance work.
 
 ## Golden rule applied
 
