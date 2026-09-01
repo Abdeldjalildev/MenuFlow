@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "npm run test:rules && node --test tests/auth-authorization-boundary.test.mjs tests/auth-claims-provisioning.test.mjs",
+    "test": "npm run test:rules && node --test tests/auth-authorization-boundary.test.mjs tests/auth-claims-provisioning.test.mjs tests/production-rules-cutover.test.mjs",
     "test:rules": "firebase emulators:exec --project demo-menuflow-rules-test --only firestore \"node --test --test-concurrency=1 tests/firestore-rules.test.mjs tests/firestore-public-write-validation.test.mjs\"",
     "test:phase2:production": "node scripts/phase2-production-verification.mjs",
     "preview": "vite preview"
