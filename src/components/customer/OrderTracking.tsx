@@ -4,11 +4,19 @@ import { OrderStatus } from './orderStatus';
 import { useMenu } from '../../context/MenuContext';
 import { auth } from '../../firebase';
 
-const toDate = (value: Parameters<typeof Date>[0]): Date => value instanceof Date ? value : new Date(value as string | number);
 export const OrderTracking: React.FC<{ t: (key: string) => string }> = ({ t }) => {
-  const { orders, updateOrderStatus, addReview } = useContext(OrderContext); const { currentTable } = useMenu(); const uid = auth.currentUser?.isAnonymous ? auth.currentUser.uid : null;
-  const currentOrder = orders.filter(order => order.tableNumber === currentTable && order.status !== 'TrackDone' && !!uid && order.customerId === uid).sort((a, b) => new Date((b.createdAt && typeof b.createdAt === 'object' && 'toDate' in b.createdAt ? b.createdAt.toDate() : b.createdAt ?? 0)).getTime() - new Date((a.createdAt && typeof a.createdAt === 'object' && 'toDate' in a.createdAt ? a.createdAt.toDate() : a.createdAt ?? 0)).getTime())[0];
-  const [rating, setRating] = useState(0); const [reviewText, setReviewText] = useState(''); const [submitted, setSubmitted] = useState(false);
+  const { orders, updateOrderStatus, addReview } = useContext(OrderContext);
+  const { currentTable } = useMenu();
+  const uid = auth.currentUser?.isAnonymous ? auth.currentUser.uid : null;
+  const currentOrder = orders
+    .filter(order => order.tableNumber === currentTable && order.status !== 'TrackDone' && !!uid && order.customerId === uid)
+    .sort((a, b) => {
+      const date = (value: typeof a.createdAt) => value && typeof value === 'object' && 'toDate' in value ? value.toDate().getTime() : new Date(value ?? 0).getTime();
+      return date(b.createdAt) - date(a.createdAt);
+    })[0];
+  const [rating, setRating] = useState(0);
+  const [reviewText, setReviewText] = useState('');
+  const [submitted, setSubmitted] = useState(false);
   if (!currentOrder) return null;
   const finish = async () => { try { await updateOrderStatus(currentOrder.id, 'TrackDone'); } catch (error) { console.error('Error finishing order:', error); } };
   return <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border shadow-sm mt-4"><h2 className="text-center font-bold mb-4">{t('currentOrderStatus')}</h2><OrderStatus status={currentOrder.status} t={t} isRated={submitted} />
