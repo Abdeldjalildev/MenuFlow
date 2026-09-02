@@ -1,169 +1,19 @@
-import React, { useState, useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { OrderContext, type Order, type OrderItem } from '../../context/OrderProvider';
 import { myReceiptsTranslations } from '../../utils/translations/myReceiptsTranslations';
+import { auth } from '../../firebase';
 import { ArrowLeft, Receipt, Star, Clock, MapPin, Phone } from 'lucide-react';
 
 type Language = 'ar' | 'fr' | 'en';
 type TranslationMap = Record<string, string>;
-
-interface MyReceiptsProps {
-  lang: Language;
-  activeOrderId?: string;
-  onBack: () => void;
-}
-
-const safeText = (field: unknown, lang: Language, fallback = ''): string => {
-  if (field === null || field === undefined || field === '') return fallback;
-  if (typeof field === 'string' || typeof field === 'number') return String(field);
-  if (typeof field === 'object') {
-    const values = field as Record<string, unknown>;
-    for (const key of [lang, 'ar', 'fr', 'en']) {
-      const value = values[key];
-      if (typeof value === 'string' || typeof value === 'number') return String(value);
-    }
-  }
-  return fallback;
-};
-
-const formatDate = (timestamp: Order['createdAt'], lang: Language): string => {
-  if (!timestamp) return '';
-  const date =
-    typeof timestamp === 'object' && 'toDate' in timestamp
-      ? timestamp.toDate()
-      : new Date(timestamp);
-
-  return date.toLocaleDateString(
-    lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-US',
-    { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }
-  );
-};
-
-export const MyReceipts: React.FC<MyReceiptsProps> = ({ lang, activeOrderId, onBack }) => {
-  const { orders } = useContext(OrderContext);
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(activeOrderId || null);
-
-  const t = (key: string): string => {
-    const current = myReceiptsTranslations[lang] as unknown as TranslationMap;
-    const fallback = myReceiptsTranslations.ar as unknown as TranslationMap;
-    return current[key] || fallback[key] || key;
-  };
-
-  const customerId = localStorage.getItem('menu_customer_id');
-  const myOrders = orders.filter((order) => {
-    const isMine = !customerId || order.customerId === customerId;
-    const isFinished = order.status === 'completed' || order.status === 'paid' || order.status === 'TrackDone';
-    return isMine && isFinished;
-  });
-
-  const selectedOrder = myOrders.find((order) => order.id === selectedOrderId);
-
-  return (
-    <div className="max-w-md mx-auto px-4 pb-24">
-      <div className="flex items-center gap-3 mb-6">
-        <button
-          onClick={onBack}
-          className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 transition"
-        >
-          <ArrowLeft size={20} className="text-slate-600 dark:text-slate-300" />
-        </button>
-        <h2 className="text-xl font-bold text-slate-800 dark:text-white">{t('myReceipts')}</h2>
-      </div>
-
-      {myOrders.length === 0 ? (
-        <div className="text-center py-16 text-slate-400">
-          <Receipt size={48} className="mx-auto mb-4 opacity-40" />
-          <p>{t('noReceipts')}</p>
-        </div>
-      ) : selectedOrder ? (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 dark:bg-slate-800/50 p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-            <div>
-              <h3 className="font-bold text-slate-800 dark:text-white">
-                {t('order')} #{selectedOrder.orderNumber || selectedOrder.id.substring(0, 6)}
-              </h3>
-              <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
-                <Clock size={12} /> {formatDate(selectedOrder.createdAt, lang)}
-              </p>
-            </div>
-            <button
-              onClick={() => setSelectedOrderId(null)}
-              className="text-xs text-indigo-600 font-bold hover:underline"
-            >
-              {t('backToList')}
-            </button>
-          </div>
-
-          <div className="p-4">
-            {selectedOrder.deliveryData?.address && (
-              <div className="flex items-start gap-2 mb-3 text-xs text-slate-600 dark:text-slate-400">
-                <MapPin size={14} className="mt-0.5 shrink-0 text-slate-400" />
-                <span>{safeText(selectedOrder.deliveryData.address, lang)}</span>
-              </div>
-            )}
-            {selectedOrder.deliveryData?.phone && (
-              <div className="flex items-center gap-2 mb-3 text-xs text-slate-600 dark:text-slate-400">
-                <Phone size={14} className="shrink-0 text-slate-400" />
-                <span dir="ltr">{selectedOrder.deliveryData.phone}</span>
-              </div>
-            )}
-
-            <ul className="space-y-2 mb-4">
-              {selectedOrder.items.map((item: OrderItem, idx: number) => (
-                <li key={item.id ?? `${item.menuItemId ?? 'item'}-${idx}`} className="flex justify-between text-sm text-slate-700 dark:text-slate-300">
-                  <span>{safeText(item.name || item.nameAr, lang, 'Item')} x{item.quantity || 1}</span>
-                  <span className="font-bold">
-                    {((item.price || 0) * (item.quantity || 1)).toLocaleString()} {t('currency')}
-                  </span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="border-t border-slate-100 dark:border-slate-800 pt-3 flex justify-between items-center">
-              <span className="font-bold text-slate-800 dark:text-white">{t('total')}</span>
-              <span className="text-lg font-black text-emerald-600">
-                {Number(selectedOrder.totalAmount || selectedOrder.totalPrice || 0).toLocaleString()} {t('currency')}
-              </span>
-            </div>
-
-            {selectedOrder.rating && (
-              <div className="mt-3 flex items-center gap-1 text-amber-500">
-                <Star size={14} fill="currentColor" />
-                <span className="text-xs font-bold">{selectedOrder.rating}/5</span>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {myOrders.map((order: Order) => (
-            <button
-              key={order.id}
-              onClick={() => setSelectedOrderId(order.id)}
-              className="w-full text-left bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all"
-            >
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h3 className="font-bold text-sm text-slate-800 dark:text-white">
-                    {t('order')} #{order.orderNumber || order.id.substring(0, 6)}
-                  </h3>
-                  <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
-                    <Clock size={10} /> {formatDate(order.createdAt, lang)}
-                  </p>
-                </div>
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-lg">
-                  {Number(order.totalAmount || order.totalPrice || 0).toLocaleString()} {t('currency')}
-                </span>
-              </div>
-              {order.rating && (
-                <div className="flex items-center gap-1 text-amber-500 mt-1">
-                  <Star size={12} fill="currentColor" />
-                  <span className="text-[10px] font-bold">{order.rating}/5</span>
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+const safeText = (field: unknown, lang: Language, fallback = ''): string => { if (field === null || field === undefined || field === '') return fallback; if (typeof field === 'string' || typeof field === 'number') return String(field); if (typeof field === 'object') { const values = field as Record<string, unknown>; for (const key of [lang, 'ar', 'fr', 'en']) { const value = values[key]; if (typeof value === 'string' || typeof value === 'number') return String(value); } } return fallback; };
+const formatDate = (timestamp: Order['createdAt'], lang: Language): string => { if (!timestamp) return ''; const date = typeof timestamp === 'object' && 'toDate' in timestamp ? timestamp.toDate() : new Date(timestamp); return date.toLocaleDateString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+export const MyReceipts: React.FC<{ lang: Language; activeOrderId?: string; onBack: () => void }> = ({ lang, activeOrderId, onBack }) => {
+  const { orders } = useContext(OrderContext); const [selectedOrderId, setSelectedOrderId] = useState<string | null>(activeOrderId || null); const uid = auth.currentUser?.isAnonymous ? auth.currentUser.uid : null;
+  const t = (key: string) => { const current = myReceiptsTranslations[lang] as unknown as TranslationMap; const fallback = myReceiptsTranslations.ar as unknown as TranslationMap; return current[key] || fallback[key] || key; };
+  const myOrders = uid ? orders.filter(order => order.customerId === uid && ['completed', 'paid', 'TrackDone'].includes(order.status)) : [];
+  const selectedOrder = myOrders.find(order => order.id === selectedOrderId);
+  return <div className="max-w-md mx-auto px-4 pb-24"><div className="flex items-center gap-3 mb-6"><button onClick={onBack} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl"><ArrowLeft size={20} /></button><h2 className="text-xl font-bold">{t('myReceipts')}</h2></div>
+    {myOrders.length === 0 ? <div className="text-center py-16 text-slate-400"><Receipt size={48} className="mx-auto mb-4 opacity-40" /><p>{t('noReceipts')}</p></div> : selectedOrder ? <div className="bg-white dark:bg-slate-900 rounded-2xl border shadow-sm overflow-hidden"><div className="p-4 border-b flex justify-between"><div><h3 className="font-bold">{t('order')} #{selectedOrder.orderNumber || selectedOrder.id.substring(0, 6)}</h3><p className="text-xs text-slate-500 flex gap-1 mt-1"><Clock size={12} />{formatDate(selectedOrder.createdAt, lang)}</p></div><button onClick={() => setSelectedOrderId(null)} className="text-xs text-indigo-600 font-bold">{t('backToList')}</button></div><div className="p-4">{selectedOrder.deliveryData?.address && <div className="flex gap-2 mb-3 text-xs"><MapPin size={14} /><span>{safeText(selectedOrder.deliveryData.address, lang)}</span></div>}{selectedOrder.deliveryData?.phone && <div className="flex gap-2 mb-3 text-xs"><Phone size={14} /><span dir="ltr">{selectedOrder.deliveryData.phone}</span></div>}<ul className="space-y-2 mb-4">{selectedOrder.items.map((item: OrderItem, idx) => <li key={item.id ?? `${item.menuItemId ?? 'item'}-${idx}`} className="flex justify-between text-sm"><span>{safeText(item.name || item.nameAr, lang, 'Item')} x{item.quantity || 1}</span><span className="font-bold">{((item.price || 0) * (item.quantity || 1)).toLocaleString()} {t('currency')}</span></li>)}</ul><div className="border-t pt-3 flex justify-between"><span className="font-bold">{t('total')}</span><span className="text-lg font-black text-emerald-600">{Number(selectedOrder.totalAmount || selectedOrder.totalPrice || 0).toLocaleString()} {t('currency')}</span></div>{selectedOrder.rating && <div className="mt-3 flex gap-1 text-amber-500"><Star size={14} fill="currentColor" /><span className="text-xs font-bold">{selectedOrder.rating}/5</span></div>}</div></div> : <div className="space-y-3">{myOrders.map(order => <button key={order.id} onClick={() => setSelectedOrderId(order.id)} className="w-full text-left bg-white dark:bg-slate-900 p-4 rounded-2xl border shadow-sm"><div className="flex justify-between"><div><h3 className="font-bold text-sm">{t('order')} #{order.orderNumber || order.id.substring(0, 6)}</h3><p className="text-[10px] text-slate-500"><Clock size={10} className="inline" /> {formatDate(order.createdAt, lang)}</p></div><span className="text-xs font-bold text-emerald-600">{Number(order.totalAmount || order.totalPrice || 0).toLocaleString()} {t('currency')}</span></div></button>)}</div>}
+  </div>;
 };

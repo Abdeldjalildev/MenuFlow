@@ -1,87 +1,76 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { onAuthStateChanged, getIdTokenResult } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
-
-type StaffRole = 'SuperAdmin' | 'Admin' | 'Cashier' | 'Kitchen' | 'Delivery';
+import type { StaffRole } from '../types/firestore';
+import { getAuthzClaims } from '../services/authClaims';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: StaffRole[];
 }
 
-interface AuthzState {
-  loading: boolean;
-  authenticated: boolean;
-  role: StaffRole | null;
-}
-
-const isStaffRole = (value: unknown): value is StaffRole =>
-  typeof value === 'string' &&
-  ['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery'].includes(value);
-
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
-  children,
-  allowedRoles,
-}) => {
-  const [authz, setAuthz] = useState<AuthzState>({
-    loading: true,
-    authenticated: false,
-    role: null,
-  });
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
+  const [authState, setAuthState] = useState<{
+    ready: boolean;
+    authenticated: boolean;
+    role: StaffRole | null;
+  }>({ ready: false, authenticated: false, role: null });
   const location = useLocation();
 
   useEffect(() => {
-    let mounted = true;
+    let active = true;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        if (mounted) {
-          setAuthz({ loading: false, authenticated: false, role: null });
+        if (active) {
+          setAuthState({ ready: true, authenticated: false, role: null });
         }
         return;
       }
 
       try {
-        const tokenResult = await getIdTokenResult(user);
-        const role = isStaffRole(tokenResult.claims.role)
-          ? tokenResult.claims.role
-          : null;
+        const claims = await getAuthzClaims(user);
 
-        if (mounted) {
-          setAuthz({ loading: false, authenticated: true, role });
+        if (active) {
+          setAuthState({
+            ready: true,
+            authenticated: true,
+            role: claims?.role ?? null,
+          });
         }
       } catch (error) {
-        console.error('Unable to verify Firebase authorization claims:', error);
-        if (mounted) {
-          setAuthz({ loading: false, authenticated: false, role: null });
+        console.error('Failed to read the authenticated user claims:', error);
+        if (active) {
+          setAuthState({ ready: true, authenticated: true, role: null });
         }
       }
     });
 
     return () => {
-      mounted = false;
+      active = false;
       unsubscribe();
     };
   }, []);
 
-  if (authz.loading) {
+  if (!authState.ready) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-indigo-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
       </div>
     );
   }
 
-  if (!authz.authenticated || !authz.role) {
+  if (!authState.authenticated || !authState.role) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(authz.role)) {
-    if (authz.role === 'SuperAdmin') {
-      return <Navigate to="/super-admin" replace />;
-    }
-    return <Navigate to="/merchant/overview" replace />;
+  if (allowedRoles && !allowedRoles.includes(authState.role)) {
+    if (authState.role === 'SuperAdmin') return <Navigate to="/super-admin" replace />;
+    if (authState.role === 'Admin') return <Navigate to="/merchant/overview" replace />;
+    if (authState.role === 'Cashier') return <Navigate to="/cashier" replace />;
+    if (authState.role === 'Kitchen') return <Navigate to="/kitchen" replace />;
+    return <Navigate to="/delivery" replace />;
   }
 
   return <>{children}</>;

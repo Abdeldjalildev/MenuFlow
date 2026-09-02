@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { getIdTokenResult, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { auth } from '../../firebase';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, Globe, Phone } from 'lucide-react';
+import { getAuthzClaims } from '../../services/authClaims';
 
+// Determine the browser's default language
 const getBrowserLanguage = (): 'ar' | 'fr' | 'en' => {
   const browserLang = navigator.language || 'en';
   if (browserLang.startsWith('ar')) return 'ar';
@@ -11,47 +13,27 @@ const getBrowserLanguage = (): 'ar' | 'fr' | 'en' => {
   return 'en';
 };
 
-type StaffRole = 'SuperAdmin' | 'Admin' | 'Cashier' | 'Kitchen' | 'Delivery';
-
 const loginTranslations = {
   ar: {
     title: 'تسجيل الدخول', subtitle: 'مرحباً بك في منصة MenuFlow', loginWithPhone: 'رقم الهاتف', loginWithEmail: 'البريد الإلكتروني',
     emailPlaceholder: 'البريد الإلكتروني', phonePlaceholder: 'رقم الهاتف (مثال: 077...إلخ)', passwordPlaceholder: 'كلمة المرور', loginBtn: 'دخول',
-    loadingBtn: 'جاري الدخول...', errorMsg: 'بيانات الدخول غير صحيحة، يرجى التأكد من الرقم/البريد وكلمة المرور',
-    authorizationError: 'تم تسجيل الدخول، لكن حسابك لا يملك صلاحيات MenuFlow الموثوقة. تواصل مع المسؤول لإضافة الصلاحيات.'
+    loadingBtn: 'جاري الدخول...', errorMsg: 'بيانات الدخول غير صحيحة، يرجى التأكد من الرقم/البريد وكلمة المرور', staffNotFound: 'لم يتم العثور على بيانات المستخدم'
   },
   fr: {
     title: 'Connexion', subtitle: 'Bienvenue sur MenuFlow', loginWithPhone: 'Numéro de téléphone', loginWithEmail: 'Adresse e-mail',
     emailPlaceholder: 'Adresse e-mail', phonePlaceholder: 'Numéro de téléphone', passwordPlaceholder: 'Mot de passe', loginBtn: 'Se connecter',
-    loadingBtn: 'Connexion en cours...', errorMsg: 'E-mail, téléphone ou mot de passe incorrect',
-    authorizationError: 'Connexion réussie, mais votre compte ne possède pas de permissions MenuFlow vérifiées.'
+    loadingBtn: 'Connexion en cours...', errorMsg: 'E-mail, téléphone ou mot de passe incorrect', staffNotFound: 'Données introuvables'
   },
   en: {
     title: 'Sign In', subtitle: 'Welcome to MenuFlow', loginWithPhone: 'Phone Number', loginWithEmail: 'Email Address',
     emailPlaceholder: 'Email Address', phonePlaceholder: 'Phone Number', passwordPlaceholder: 'Password', loginBtn: 'Sign In',
-    loadingBtn: 'Signing in...', errorMsg: 'Invalid credentials or password',
-    authorizationError: 'Signed in successfully, but this account has no trusted MenuFlow authorization claims.'
-  }
-};
-
-const isStaffRole = (value: unknown): value is StaffRole =>
-  typeof value === 'string' &&
-  ['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery'].includes(value);
-
-const roleDestination = (role: StaffRole): string => {
-  switch (role) {
-    case 'SuperAdmin': return '/super-admin';
-    case 'Admin': return '/merchant/overview';
-    case 'Cashier': return '/cashier';
-    case 'Kitchen': return '/kitchen';
-    case 'Delivery': return '/delivery';
+    loadingBtn: 'Signing in...', errorMsg: 'Invalid credentials or password', staffNotFound: 'User data not found'
   }
 };
 
 export const Login: React.FC = () => {
   const [lang, setLang] = useState<'ar' | 'fr' | 'en'>(() => {
-    const stored = localStorage.getItem('preferred_lang');
-    return stored === 'ar' || stored === 'fr' || stored === 'en' ? stored : getBrowserLanguage();
+    return (localStorage.getItem('preferred_lang') as 'ar' | 'fr' | 'en') || getBrowserLanguage();
   });
   const t = loginTranslations[lang];
   const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
@@ -80,37 +62,32 @@ export const Login: React.FC = () => {
       }
 
       const userCredential = await signInWithEmailAndPassword(auth, authEmail, password);
-      const tokenResult = await getIdTokenResult(userCredential.user, true);
-      const role = tokenResult.claims.role;
-      const restaurantId = tokenResult.claims.restaurantId;
+      const user = userCredential.user;
+      const claims = await getAuthzClaims(user);
 
-      if (!isStaffRole(role)) {
-        await auth.signOut();
-        setError(t.authorizationError);
-        return;
+      // Authorization must come only from Firebase's signed ID-token claims.
+      // Browser storage below is presentation/cache state and is never used
+      // to grant access to a protected route or privileged operation.
+      if (!claims) {
+        await signOut(auth);
+        throw new Error(t.staffNotFound);
       }
 
-      if (role !== 'SuperAdmin' && typeof restaurantId !== 'string') {
-        await auth.signOut();
-        setError(t.authorizationError);
-        return;
-      }
-
-      // These values are cached only for non-authoritative UI display.
-      // ProtectedRoute and Firestore rules use Firebase Auth claims instead.
-      localStorage.setItem('userId', userCredential.user.uid);
-      localStorage.setItem('userRole', role);
-      localStorage.setItem('userName', userCredential.user.displayName || userCredential.user.email || 'MenuFlow User');
-
-      if (typeof restaurantId === 'string') {
-        localStorage.setItem('restaurantId', restaurantId);
+      localStorage.setItem('userId', user.uid);
+      localStorage.setItem('userRole', claims.role);
+      if (claims.restaurantId) {
+        localStorage.setItem('restaurantId', claims.restaurantId);
       } else {
         localStorage.removeItem('restaurantId');
       }
+      localStorage.setItem('userName', user.displayName || inputValue.trim());
 
-      navigate(roleDestination(role));
-    } catch (loginError) {
-      console.error('MenuFlow login failed:', loginError);
+      if (claims.role === 'SuperAdmin') navigate('/super-admin');
+      else if (claims.role === 'Admin') navigate('/merchant/overview');
+      else if (claims.role === 'Cashier') navigate('/cashier');
+      else if (claims.role === 'Kitchen') navigate('/kitchen');
+      else navigate('/delivery');
+    } catch {
       setError(t.errorMsg);
     } finally {
       setLoading(false);

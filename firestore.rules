@@ -1,149 +1,45 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    function role() {
-      return signedIn() ? request.auth.token.role : null;
-    }
-
-    function hasRole(requiredRole) {
-      return signedIn() && role() == requiredRole;
-    }
-
-    function isSuperAdmin() {
-      return hasRole('SuperAdmin');
-    }
-
-    function isRestaurantStaff(restaurantId) {
-      return signedIn()
-        && role() in ['Admin', 'Cashier', 'Kitchen', 'Delivery']
-        && request.auth.token.restaurantId == restaurantId;
-    }
-
-    function canManageRestaurant(restaurantId) {
-      return isSuperAdmin() || isRestaurantStaff(restaurantId);
-    }
-
-    function ownsRestaurantData(data) {
-      return data.restaurantId is string && canManageRestaurant(data.restaurantId);
-    }
-
-    function preservesTenant(resourceData, requestData) {
-      return resourceData.restaurantId == requestData.restaurantId;
-    }
-
-    match /restaurants/{restaurantId}/menuItems/{menuItemId} {
-      allow read: if true;
-      allow create: if canManageRestaurant(restaurantId)
-        && request.resource.data.restaurantId == restaurantId;
-      allow update, delete: if canManageRestaurant(restaurantId)
-        && resource.data.restaurantId == restaurantId
-        && request.resource.data.restaurantId == restaurantId;
-    }
-
-    match /restaurants/{restaurantId}/settings/{settingId} {
-      allow read: if settingId == 'theme';
-      allow write: if canManageRestaurant(restaurantId);
-    }
-
+    function signedIn() { return request.auth != null; }
+    function role() { return signedIn() ? request.auth.token.get('role', null) : null; }
+    function restaurantClaim() { return signedIn() ? request.auth.token.get('restaurantId', null) : null; }
+    function isSuperAdmin() { return role() == 'SuperAdmin'; }
+    function isTenantRole(restaurantId, allowedRoles) { return signedIn() && restaurantClaim() == restaurantId && role() in allowedRoles; }
+    function isTenantAdmin(restaurantId) { return isTenantRole(restaurantId, ['Admin']); }
+    function isTenantOperator(restaurantId) { return isTenantRole(restaurantId, ['Admin', 'Cashier', 'Kitchen', 'Delivery']); }
+    function isAnonymousCustomer() { return signedIn() && request.auth.token.get('firebase', {}).get('sign_in_provider', '') == 'anonymous'; }
+    function validTimestampFields(data) { return (!data.keys().hasAny(['createdAt']) || data.createdAt is timestamp) && (!data.keys().hasAny(['updatedAt']) || data.updatedAt is timestamp); }
+    function validOptionalString(data, field, maxLength) { return !data.keys().hasAny([field]) || (data.get(field, '') is string && data.get(field, '').size() <= maxLength); }
+    function ownsOrder(restaurantId, orderId) { return get(/databases/$(database)/documents/restaurants/$(restaurantId)/orders/$(orderId)).data.customerId == request.auth.uid; }
+    function validOrder(restaurantId) { return request.resource.data.keys().hasAll(['restaurantId','customerId','items','tableNumber','status','totalAmount']) && request.resource.data.keys().hasOnly(['restaurantId','customerId','items','tableNumber','status','totalAmount','customerName','customerPhone','deliveryAddress','deliveryData','createdAt','driverId','driverName','isClaimed','orderNumber']) && request.resource.data.restaurantId == restaurantId && request.resource.data.customerId == request.auth.uid && request.resource.data.items is list && request.resource.data.items.size() <= 50 && request.resource.data.tableNumber is string && request.resource.data.tableNumber.size() > 0 && request.resource.data.tableNumber.size() <= 32 && request.resource.data.status == 'pending' && request.resource.data.totalAmount is number && request.resource.data.totalAmount >= 0 && validOptionalString(request.resource.data, 'customerName', 120) && validOptionalString(request.resource.data, 'customerPhone', 40) && validOptionalString(request.resource.data, 'deliveryAddress', 500) && validOptionalString(request.resource.data, 'driverId', 128) && validOptionalString(request.resource.data, 'driverName', 120) && validTimestampFields(request.resource.data); }
+    function validReview(restaurantId) { return request.resource.data.keys().hasAll(['restaurantId','orderId','rating']) && request.resource.data.keys().hasOnly(['restaurantId','orderId','rating','comment','createdAt']) && request.resource.data.restaurantId == restaurantId && request.resource.data.orderId is string && request.resource.data.orderId.size() > 0 && request.resource.data.orderId.size() <= 128 && request.resource.data.rating is number && request.resource.data.rating >= 1 && request.resource.data.rating <= 5 && request.resource.data.get('comment','') is string && request.resource.data.get('comment','').size() <= 1000 && validTimestampFields(request.resource.data) && ownsOrder(restaurantId, request.resource.data.orderId); }
+    function validComplaint(restaurantId) { return request.resource.data.keys().hasAll(['restaurantId','message','status']) && request.resource.data.keys().hasOnly(['restaurantId','orderId','customerName','customerPhone','message','rating','status','createdAt']) && request.resource.data.restaurantId == restaurantId && request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 2000 && request.resource.data.status == 'pending' && request.resource.data.get('orderId','') is string && request.resource.data.get('orderId','').size() <= 128 && request.resource.data.get('customerName','') is string && request.resource.data.get('customerName','').size() <= 120 && request.resource.data.get('customerPhone','') is string && request.resource.data.get('customerPhone','').size() <= 40 && request.resource.data.get('rating',0) is number && request.resource.data.get('rating',0) >= 0 && request.resource.data.get('rating',0) <= 5 && validTimestampFields(request.resource.data) && (!request.resource.data.keys().hasAny(['orderId']) || ownsOrder(restaurantId, request.resource.data.orderId)); }
     match /restaurants/{restaurantId} {
-      allow read: if true;
-      allow create, update, delete: if isSuperAdmin();
+      allow read: if true; allow create, update, delete: if isSuperAdmin();
+      match /settings/{settingId} { allow read: if settingId == 'theme'; allow write: if isTenantAdmin(restaurantId); }
+      match /menuItems/{menuItemId} { allow read: if true; allow create, update, delete: if isTenantAdmin(restaurantId); }
+      match /categories/{categoryId} { allow read: if true; allow write: if isTenantAdmin(restaurantId); }
+      match /qrConfig/{configId} { allow read, write: if isTenantAdmin(restaurantId); }
+      match /orders/{orderId} { allow create: if isAnonymousCustomer() && validOrder(restaurantId); allow get, list: if isTenantOperator(restaurantId) || isSuperAdmin() || (isAnonymousCustomer() && resource.data.customerId == request.auth.uid); allow update: if isTenantOperator(restaurantId) && request.resource.data.restaurantId == resource.data.restaurantId && request.resource.data.customerId == resource.data.customerId && request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null); allow delete: if isTenantAdmin(restaurantId) || isSuperAdmin(); }
+      match /reviews/{reviewId} { allow create: if isAnonymousCustomer() && validReview(restaurantId); allow get, list: if isTenantOperator(restaurantId) || isSuperAdmin(); allow update, delete: if isTenantAdmin(restaurantId) || isSuperAdmin(); }
+      match /complaints/{complaintId} { allow create: if isAnonymousCustomer() && validComplaint(restaurantId); allow get, list: if isTenantOperator(restaurantId) || isSuperAdmin(); allow update, delete: if isTenantAdmin(restaurantId) || isSuperAdmin(); }
+      match /customers/{customerId} { allow get: if (isAnonymousCustomer() && customerId == request.auth.uid && resource.data.restaurantId == restaurantId) || isTenantRole(restaurantId, ['Admin','Cashier']); allow list: if isTenantRole(restaurantId, ['Admin','Cashier']); allow create, update: if isTenantRole(restaurantId, ['Admin','Cashier']); allow delete: if isTenantAdmin(restaurantId); }
+      match /staff/{staffId} { allow read: if isTenantOperator(restaurantId) || isSuperAdmin(); allow write: if isTenantAdmin(restaurantId) || isSuperAdmin(); }
+      match /inventory/{inventoryId} { allow read, write: if isTenantRole(restaurantId, ['Admin','Kitchen']); }
+      match /recipes/{recipeId} { allow read, write: if isTenantRole(restaurantId, ['Admin','Kitchen']); }
+      match /waste_log/{entryId} { allow read, write: if isTenantOperator(restaurantId) || isSuperAdmin(); }
+      match /wasteLog/{entryId} { allow read, write: if isTenantOperator(restaurantId) || isSuperAdmin(); }
     }
-
-    match /orders/{orderId} {
-      // Customer order creation remains open until customer identity is migrated
-      // from localStorage IDs to Firebase Auth/anonymous Auth.
-      allow create: if request.resource.data.restaurantId is string;
-      allow read: if ownsRestaurantData(resource.data);
-      allow update: if ownsRestaurantData(resource.data)
-        && preservesTenant(resource.data, request.resource.data);
-      allow delete: if ownsRestaurantData(resource.data);
-    }
-
-    match /staff/{staffId} {
-      allow read: if isSuperAdmin()
-        || (signedIn() && request.auth.token.restaurantId == resource.data.restaurantId);
-      allow create: if isSuperAdmin()
-        || (signedIn()
-          && role() == 'Admin'
-          && request.auth.token.restaurantId == request.resource.data.restaurantId);
-      allow update: if isSuperAdmin()
-        || (signedIn()
-          && role() == 'Admin'
-          && request.auth.token.restaurantId == resource.data.restaurantId
-          && request.resource.data.restaurantId == resource.data.restaurantId);
-      allow delete: if isSuperAdmin()
-        || (signedIn()
-          && role() == 'Admin'
-          && request.auth.token.restaurantId == resource.data.restaurantId);
-    }
-
-    match /customers/{customerId} {
-      allow read: if ownsRestaurantData(resource.data);
-      allow create: if isSuperAdmin()
-        || (signedIn()
-          && role() == 'Admin'
-          && request.auth.token.restaurantId == request.resource.data.restaurantId);
-      allow update: if ownsRestaurantData(resource.data)
-        && preservesTenant(resource.data, request.resource.data);
-      allow delete: if ownsRestaurantData(resource.data);
-    }
-
-    match /inventory/{inventoryId} {
-      allow read: if ownsRestaurantData(resource.data);
-      allow create: if canManageRestaurant(request.resource.data.restaurantId);
-      allow update: if ownsRestaurantData(resource.data)
-        && preservesTenant(resource.data, request.resource.data);
-      allow delete: if ownsRestaurantData(resource.data);
-    }
-
-    match /recipes/{recipeId} {
-      allow read: if ownsRestaurantData(resource.data);
-      allow create: if canManageRestaurant(request.resource.data.restaurantId);
-      allow update: if ownsRestaurantData(resource.data)
-        && preservesTenant(resource.data, request.resource.data);
-      allow delete: if ownsRestaurantData(resource.data);
-    }
-
-    match /reviews/{reviewId} {
-      allow create: if request.resource.data.restaurantId is string;
-      allow read: if ownsRestaurantData(resource.data);
-      allow update: if ownsRestaurantData(resource.data)
-        && preservesTenant(resource.data, request.resource.data);
-      allow delete: if ownsRestaurantData(resource.data);
-    }
-
-    match /complaints/{complaintId} {
-      allow create: if request.resource.data.restaurantId is string;
-      allow read: if ownsRestaurantData(resource.data);
-      allow update: if ownsRestaurantData(resource.data)
-        && preservesTenant(resource.data, request.resource.data);
-      allow delete: if ownsRestaurantData(resource.data);
-    }
-
-    match /waste_log/{entryId} {
-      allow read: if ownsRestaurantData(resource.data);
-      allow create: if canManageRestaurant(request.resource.data.restaurantId);
-      allow update: if ownsRestaurantData(resource.data)
-        && preservesTenant(resource.data, request.resource.data);
-      allow delete: if ownsRestaurantData(resource.data);
-    }
-
-    match /wasteLog/{entryId} {
-      allow read: if ownsRestaurantData(resource.data);
-      allow create: if canManageRestaurant(request.resource.data.restaurantId);
-      allow update: if ownsRestaurantData(resource.data)
-        && preservesTenant(resource.data, request.resource.data);
-      allow delete: if ownsRestaurantData(resource.data);
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
-    }
+    match /orders/{orderId} { allow read, write: if false; }
+    match /reviews/{reviewId} { allow read, write: if false; }
+    match /complaints/{complaintId} { allow read, write: if false; }
+    match /staff/{staffId} { allow read, write: if false; }
+    match /customers/{customerId} { allow read, write: if false; }
+    match /inventory/{inventoryId} { allow read, write: if false; }
+    match /recipes/{recipeId} { allow read, write: if false; }
+    match /waste_log/{entryId} { allow read, write: if false; }
+    match /wasteLog/{entryId} { allow read, write: if false; }
+    match /{document=**} { allow read, write: if false; }
   }
 }

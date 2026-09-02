@@ -1,0 +1,437 @@
+rules_version = '2';
+
+// Test-only target authorization model for Phase 2 security validation.
+// Production firestore.rules is intentionally unchanged until the trusted
+// claims provisioning and data-path cutover are complete.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return signedIn() ? request.auth.token.get('role', null) : null;
+    }
+
+    function restaurantClaim() {
+      return signedIn() ? request.auth.token.get('restaurantId', null) : null;
+    }
+
+    function isSuperAdmin() {
+      return role() == 'SuperAdmin';
+    }
+
+    function isTenantRole(restaurantId, allowedRoles) {
+      return signedIn()
+        && restaurantClaim() == restaurantId
+        && role() in allowedRoles;
+    }
+
+    function isTenantAdmin(restaurantId) {
+      return isTenantRole(restaurantId, ['Admin']);
+    }
+
+    function isTenantOperator(restaurantId) {
+      return isTenantRole(restaurantId, ['Admin', 'Cashier', 'Kitchen', 'Delivery']);
+    }
+
+    function isAnonymousCustomer() {
+      return signedIn()
+        && request.auth.token.get('firebase', {}).get('sign_in_provider', '') == 'anonymous';
+    }
+
+    function ownsOrder(restaurantId, orderId) {
+      return get(
+        /databases/$(database)/documents/restaurants/$(restaurantId)/orders/$(orderId)
+      ).data.customerId == request.auth.uid;
+    }
+
+    function validTimestampFields(data) {
+      return (!data.keys().hasAny(['createdAt']) || data.createdAt is timestamp)
+        && (!data.keys().hasAny(['updatedAt']) || data.updatedAt is timestamp);
+    }
+
+    function validOptionalString(data, field, maxLength) {
+      return !data.keys().hasAny([field])
+        || (data.get(field, '') is string && data.get(field, '').size() <= maxLength);
+    }
+
+    function isValidOrder(restaurantId) {
+      return request.resource.data.keys().hasAll([
+          'restaurantId', 'customerId', 'items', 'tableNumber', 'status', 'totalAmount'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'customerId', 'items', 'tableNumber', 'status', 'totalAmount',
+          'customerName', 'customerPhone', 'deliveryAddress', 'deliveryData', 'createdAt',
+          'driverId', 'driverName', 'isClaimed', 'orderNumber'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.items is list
+        && request.resource.data.items.size() <= 50
+        && request.resource.data.tableNumber is string
+        && request.resource.data.tableNumber.size() > 0
+        && request.resource.data.tableNumber.size() <= 32
+        && request.resource.data.status == 'pending'
+        && request.resource.data.totalAmount is number
+        && request.resource.data.totalAmount >= 0
+        && validOptionalString(request.resource.data, 'customerName', 120)
+        && validOptionalString(request.resource.data, 'customerPhone', 40)
+        && validOptionalString(request.resource.data, 'deliveryAddress', 500)
+        && validOptionalString(request.resource.data, 'driverId', 128)
+        && validOptionalString(request.resource.data, 'driverName', 120)
+        && validTimestampFields(request.resource.data);
+    }
+
+    function isValidReview(restaurantId) {
+      return request.resource.data.keys().hasAll(['restaurantId', 'orderId', 'rating'])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'orderId', 'rating', 'comment', 'createdAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.orderId is string
+        && request.resource.data.orderId.size() > 0
+        && request.resource.data.orderId.size() <= 128
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.get('comment', '') is string
+        && request.resource.data.get('comment', '').size() <= 1000
+        && validTimestampFields(request.resource.data)
+        && ownsOrder(restaurantId, request.resource.data.orderId);
+    }
+
+    function isValidComplaint(restaurantId) {
+      return request.resource.data.keys().hasAll(['restaurantId', 'message', 'status'])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'orderId', 'customerName', 'customerPhone', 'message', 'rating',
+          'status', 'createdAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 2000
+        && request.resource.data.status == 'pending'
+        && request.resource.data.get('orderId', '') is string
+        && request.resource.data.get('orderId', '').size() <= 128
+        && request.resource.data.get('customerName', '') is string
+        && request.resource.data.get('customerName', '').size() <= 120
+        && request.resource.data.get('customerPhone', '') is string
+        && request.resource.data.get('customerPhone', '').size() <= 40
+        && request.resource.data.get('rating', 0) is number
+        && request.resource.data.get('rating', 0) >= 0
+        && request.resource.data.get('rating', 0) <= 5
+        && validTimestampFields(request.resource.data)
+        && (
+          !request.resource.data.keys().hasAny(['orderId'])
+          || ownsOrder(restaurantId, request.resource.data.orderId)
+        );
+    }
+
+    function isValidStaff(restaurantId) {
+      return request.resource.data.keys().hasAll([
+          'restaurantId', 'uid', 'name', 'role', 'phone', 'salary', 'status'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'uid', 'name', 'role', 'phone', 'email', 'salary', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.uid is string
+        && request.resource.data.name is string
+        && request.resource.data.role in ['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery']
+        && request.resource.data.phone is string
+        && request.resource.data.salary is number
+        && request.resource.data.status in ['active', 'inactive']
+        && validTimestampFields(request.resource.data);
+    }
+
+    function isValidStaffUpdate(restaurantId) {
+      return isValidStaff(restaurantId)
+        && request.resource.data.uid == resource.data.uid
+        && (
+          resource.data.uid != request.auth.uid
+          || (
+            request.resource.data.role == resource.data.role
+            && request.resource.data.restaurantId == resource.data.restaurantId
+          )
+        );
+    }
+
+    function isValidMenuItem(restaurantId) {
+      return request.resource.data.keys().hasAll([
+          'restaurantId', 'name', 'price', 'categoryId', 'isAvailable'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'name', 'description', 'price', 'categoryId', 'image', 'recipeId',
+          'isAvailable', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.name is map
+        && request.resource.data.get('description', {}) is map
+        && request.resource.data.price is number
+        && request.resource.data.categoryId is string
+        && request.resource.data.isAvailable is bool
+        && validTimestampFields(request.resource.data);
+    }
+
+    function isValidCategory(restaurantId) {
+      return request.resource.data.keys().hasAll(['restaurantId', 'name', 'isActive'])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'name', 'sortOrder', 'isActive', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.name is map
+        && request.resource.data.get('sortOrder', 0) is number
+        && request.resource.data.isActive is bool
+        && validTimestampFields(request.resource.data);
+    }
+
+    function isValidInventory(restaurantId) {
+      return request.resource.data.keys().hasAll(['restaurantId', 'name', 'unit', 'quantity'])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'name', 'unit', 'quantity', 'currentQuantity', 'minimumQuantity',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.name is string
+        && request.resource.data.unit is string
+        && request.resource.data.quantity is number
+        && request.resource.data.get('currentQuantity', 0) is number
+        && request.resource.data.get('minimumQuantity', 0) is number
+        && validTimestampFields(request.resource.data);
+    }
+
+    function isValidRecipe(restaurantId) {
+      return request.resource.data.keys().hasAll(['restaurantId', 'name', 'cost', 'recipeIngredients'])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'menuItemId', 'name', 'cost', 'recipeIngredients', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.name is map
+        && request.resource.data.get('menuItemId', '') is string
+        && request.resource.data.cost is number
+        && request.resource.data.recipeIngredients is list
+        && validTimestampFields(request.resource.data);
+    }
+
+    function isValidCustomer(restaurantId) {
+      return request.resource.data.keys().hasAll(['restaurantId', 'customerId', 'points', 'activeDiscount'])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'customerId', 'name', 'phone', 'points', 'activeDiscount', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.customerId is string
+        && request.resource.data.points is number
+        && request.resource.data.activeDiscount is number
+        && validTimestampFields(request.resource.data);
+    }
+
+    function isValidExpense(restaurantId) {
+      return request.resource.data.keys().hasAll(['restaurantId', 'title', 'amount', 'category'])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'title', 'amount', 'category', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.title is string
+        && request.resource.data.amount is number
+        && request.resource.data.category is string
+        && request.resource.data.get('notes', '') is string
+        && validTimestampFields(request.resource.data);
+    }
+
+    function isValidSupplier(restaurantId) {
+      return request.resource.data.keys().hasAll(['restaurantId', 'companyName'])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'companyName', 'contactName', 'phone', 'email', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.companyName is string
+        && request.resource.data.get('contactName', '') is string
+        && request.resource.data.get('phone', '') is string
+        && request.resource.data.get('email', '') is string
+        && validTimestampFields(request.resource.data);
+    }
+
+    function isValidStockTake(restaurantId) {
+      return request.resource.data.keys().hasAll([
+          'restaurantId', 'inventoryItemId', 'previousQuantity', 'countedQuantity', 'difference'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'inventoryItemId', 'previousQuantity', 'countedQuantity', 'difference',
+          'notes', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.inventoryItemId is string
+        && request.resource.data.previousQuantity is number
+        && request.resource.data.countedQuantity is number
+        && request.resource.data.difference is number
+        && request.resource.data.get('notes', '') is string
+        && validTimestampFields(request.resource.data);
+    }
+
+    function isValidWasteLog(restaurantId) {
+      return request.resource.data.keys().hasAll(['restaurantId', 'estimatedLoss', 'reason'])
+        && request.resource.data.keys().hasOnly([
+          'restaurantId', 'inventoryItemId', 'orderId', 'estimatedLoss', 'reason', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.get('inventoryItemId', '') is string
+        && request.resource.data.get('orderId', '') is string
+        && request.resource.data.estimatedLoss is number
+        && request.resource.data.reason is string
+        && validTimestampFields(request.resource.data);
+    }
+
+    match /restaurants/{restaurantId} {
+      allow get, list: if isSuperAdmin();
+      allow create, update, delete: if isSuperAdmin();
+
+      match /settings/theme {
+        allow read: if true;
+        allow write: if isTenantAdmin(restaurantId);
+      }
+
+      match /settings/operational {
+        allow read, write: if isTenantAdmin(restaurantId);
+      }
+
+      match /settings/loyalty {
+        allow read, write: if isTenantAdmin(restaurantId);
+      }
+
+      match /menuItems/{menuItemId} {
+        allow read: if true;
+        allow create: if isTenantAdmin(restaurantId) && isValidMenuItem(restaurantId);
+        allow update: if isTenantAdmin(restaurantId)
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && isValidMenuItem(restaurantId);
+        allow delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /categories/{categoryId} {
+        allow read: if true;
+        allow create: if isTenantAdmin(restaurantId) && isValidCategory(restaurantId);
+        allow update: if isTenantAdmin(restaurantId)
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && isValidCategory(restaurantId);
+        allow delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /qrConfig/default {
+        allow read, write: if isTenantAdmin(restaurantId);
+      }
+
+      match /staff/{staffId} {
+        allow get: if isTenantAdmin(restaurantId)
+          || (isTenantOperator(restaurantId) && resource.data.uid == request.auth.uid);
+        allow list: if isTenantAdmin(restaurantId);
+        allow create: if isSuperAdmin()
+          || (
+            isTenantAdmin(restaurantId)
+            && isValidStaff(restaurantId)
+            && request.resource.data.role in ['Cashier', 'Kitchen', 'Delivery']
+          );
+        allow update: if isSuperAdmin()
+          || (
+            isTenantAdmin(restaurantId)
+            && isValidStaffUpdate(restaurantId)
+            && request.resource.data.role in ['Cashier', 'Kitchen', 'Delivery']
+          );
+        allow delete: if isSuperAdmin() || isTenantAdmin(restaurantId);
+      }
+
+      match /orders/{orderId} {
+        allow create: if isAnonymousCustomer() && isValidOrder(restaurantId);
+        allow get, list: if isTenantOperator(restaurantId);
+        allow update: if isTenantOperator(restaurantId)
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && request.resource.data.customerId == resource.data.customerId
+          && request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null);
+        allow delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /inventory/{inventoryItemId} {
+        allow get, list: if isTenantRole(restaurantId, ['Admin', 'Kitchen']);
+        allow create: if isTenantAdmin(restaurantId) && isValidInventory(restaurantId);
+        allow update: if isTenantAdmin(restaurantId)
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && isValidInventory(restaurantId);
+        allow delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /recipes/{recipeId} {
+        allow get, list: if isTenantRole(restaurantId, ['Admin', 'Kitchen']);
+        allow create: if isTenantAdmin(restaurantId) && isValidRecipe(restaurantId);
+        allow update: if isTenantAdmin(restaurantId)
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && isValidRecipe(restaurantId);
+        allow delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /customers/{customerId} {
+        allow get, list: if isTenantRole(restaurantId, ['Admin', 'Cashier']);
+        allow create: if isTenantRole(restaurantId, ['Admin', 'Cashier'])
+          && isValidCustomer(restaurantId)
+          && request.resource.data.customerId == customerId;
+        allow update: if isTenantRole(restaurantId, ['Admin', 'Cashier'])
+          && isValidCustomer(restaurantId)
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && request.resource.data.customerId == resource.data.customerId;
+        allow delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /reviews/{reviewId} {
+        allow create: if isAnonymousCustomer() && isValidReview(restaurantId);
+        allow get, list: if isTenantAdmin(restaurantId);
+        allow update, delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /complaints/{complaintId} {
+        allow create: if isAnonymousCustomer() && isValidComplaint(restaurantId);
+        allow get, list: if isTenantAdmin(restaurantId);
+        allow update, delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /expenses/{expenseId} {
+        allow get, list: if isTenantAdmin(restaurantId);
+        allow create: if isTenantAdmin(restaurantId) && isValidExpense(restaurantId);
+        allow update: if isTenantAdmin(restaurantId)
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && isValidExpense(restaurantId);
+        allow delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /suppliers/{supplierId} {
+        allow get, list: if isTenantAdmin(restaurantId);
+        allow create: if isTenantAdmin(restaurantId) && isValidSupplier(restaurantId);
+        allow update: if isTenantAdmin(restaurantId)
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && isValidSupplier(restaurantId);
+        allow delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /stockTakes/{stockTakeId} {
+        allow get, list: if isTenantAdmin(restaurantId);
+        allow create: if isTenantAdmin(restaurantId) && isValidStockTake(restaurantId);
+        allow update: if isTenantAdmin(restaurantId)
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && isValidStockTake(restaurantId);
+        allow delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /wasteLogs/{wasteLogId} {
+        allow get, list: if isTenantAdmin(restaurantId);
+        allow create: if isTenantAdmin(restaurantId) && isValidWasteLog(restaurantId);
+        allow update: if isTenantAdmin(restaurantId)
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && isValidWasteLog(restaurantId);
+        allow delete: if isTenantAdmin(restaurantId);
+      }
+
+      match /{document=**} {
+        allow read, write: if isSuperAdmin();
+      }
+    }
+  }
+}
