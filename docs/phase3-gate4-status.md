@@ -1,6 +1,6 @@
 # Phase 3 Gate 4 — Concurrency-Safe Order Numbers & Atomic Order Mutations
 
-Status: **IMPLEMENTED — regression verification pending**
+Status: **VERIFIED — CI regression contract passed**
 
 ## Completed
 
@@ -9,20 +9,26 @@ Status: **IMPLEMENTED — regression verification pending**
 - Daily order numbers are allocated inside a Firestore transaction.
 - Counter documents are tenant-scoped under `restaurants/{restaurantId}/orderNumberCounters/{YYYY-MM-DD}`.
 - A new calendar-day counter starts at order number `1`; the date key prevents the previous day's sequence from being reused.
-- Counter state is validated before allocation; invalid counter state fails closed.
-- Counter increment and order creation occur in the same Firestore transaction, preventing a successful order from being created without consuming its allocated number and preventing two successful transactions from committing the same number.
+- Counter state is validated before allocation; invalid state fails closed.
+- Counter increment and order creation occur in the same Firestore transaction.
 - The order stores both `orderNumber` and `orderNumberDate`.
 - `appendToOrder` remains transaction-backed to prevent lost updates.
 - Driver claiming remains transaction-backed and idempotent for retries by the same driver.
 - Lifecycle updates remain behind the server-authoritative `transitionOrder` callable and its transaction.
-- Added a Gate 4 regression contract covering daily reset semantics, invalid counters, server-side allocation, and transactional mutation paths.
+- Gate 4 regression coverage verifies daily reset semantics, invalid counters, server-side allocation, and transactional mutation paths.
 
-## Verification boundary
+## Verification evidence
 
-- Automated Gate 4 contract tests are wired into `npm test` through `test:phase3:gate4`.
-- Full runtime emulator verification of concurrent callable invocations is still a separate verification step; it is not represented as passed by this document.
-- Production execution of Cloud Functions remains subject to the previously recorded Firebase billing gate.
+- GitHub Actions CI passed on the Gate 2–5 branch head.
+- Firestore security regression suite: **24/24 passed**.
+- Gate 4 regression suite: **5/5 passed**.
+- Gate 5 regression/security suite: **11/11 passed**.
+- Authorization/claims/production-cutover contract suite: **12/12 passed**.
+- Lint: passed.
+- TypeScript and production build: passed.
+- Firebase Functions Node 20 validation: passed.
+- `git diff --check`: passed in CI.
 
-## Deferred without blocking the roadmap
+## Boundary
 
-If runtime/emulator infrastructure prevents full concurrency execution, record the blocker and continue to the next approved gate. Do not replace missing evidence with a false "verified" status.
+The automated evidence validates the transaction design and source contract. A separate live high-contention invocation test against deployed Cloud Functions was not performed because production execution remains subject to the previously recorded Firebase billing gate. No production success is claimed.
