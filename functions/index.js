@@ -30,9 +30,9 @@ exports.provisionAuthzClaims = onCall(async (request) => {
   if (role !== 'SuperAdmin' && !isNonEmptyString(restaurantId)) throw new HttpsError('invalid-argument', 'Tenant roles require restaurantId.');
   const callerRole = caller.role, callerRestaurantId = caller.restaurantId;
   if (!ALLOWED_ROLES.has(callerRole)) throw new HttpsError('permission-denied', 'Caller has no valid authorization role.');
-  if (role === 'SuperAdmin' && callerRole !== 'SuperAdmin') throw new HttpsError('permission-denied', 'Only SuperAdmin may provision SuperAdmin claims.');
+  if (role === 'SuperAdmin' && callerRole !== 'SuperAdmin') throw new HttpsError('permission-denied', 'Only an existing SuperAdmin can provision another SuperAdmin.');
   if (callerRole !== 'SuperAdmin') {
-    if (callerRole !== 'Admin' || !TENANT_STAFF_ROLES.has(role)) throw new HttpsError('permission-denied', 'Caller cannot provision this role.');
+    if (callerRole !== 'Admin' || !TENANT_STAFF_ROLES.has(role)) throw new HttpsError('permission-denied', 'Tenant administrators can only provision non-privileged staff roles.');
     if (callerRestaurantId !== restaurantId) throw new HttpsError('permission-denied', 'Cross-tenant claim provisioning is forbidden.');
   }
   let targetUser;
@@ -68,11 +68,7 @@ function normalizeOrderItems(items) {
 function normalizeDeliveryData(deliveryData) {
   if (deliveryData == null) return null;
   if (typeof deliveryData !== 'object') throw new HttpsError('invalid-argument', 'deliveryData must be an object or null.');
-  return {
-    name: typeof deliveryData.name === 'string' ? deliveryData.name.slice(0, 120) : undefined,
-    address: typeof deliveryData.address === 'string' ? deliveryData.address.slice(0, 500) : undefined,
-    phone: typeof deliveryData.phone === 'string' ? deliveryData.phone.slice(0, 40) : undefined,
-  };
+  return { name: typeof deliveryData.name === 'string' ? deliveryData.name.slice(0, 120) : undefined, address: typeof deliveryData.address === 'string' ? deliveryData.address.slice(0, 500) : undefined, phone: typeof deliveryData.phone === 'string' ? deliveryData.phone.slice(0, 40) : undefined };
 }
 
 exports.createOrder = onCall(async (request) => {
@@ -86,7 +82,6 @@ exports.createOrder = onCall(async (request) => {
   const calculatedTotal = items.reduce((sum, item) => sum + Number(item.price ?? item.unitPrice ?? 0) * Number(item.quantity ?? 1), 0);
   const totalAmount = suppliedTotal == null ? calculatedTotal : Number(suppliedTotal);
   if (!Number.isFinite(totalAmount) || totalAmount < 0) throw new HttpsError('invalid-argument', 'totalAmount must be a non-negative number.');
-
   const db = getFirestore();
   const orderRef = db.collection(`restaurants/${restaurantId}/orders`).doc();
   const orderNumberDate = getOrderNumberDate();
@@ -98,12 +93,7 @@ exports.createOrder = onCall(async (request) => {
     orderNumber = currentNextNumber;
     tx.set(counterRef, { nextNumber: orderNumber + 1, date: orderNumberDate, updatedAt: new Date() }, { merge: true });
     const shortId = auth.uid.slice(-4);
-    tx.create(orderRef, {
-      restaurantId, customerId: auth.uid, items, tableNumber, status: 'pending', totalAmount,
-      customerName: deliveryData?.name || (tableNumber !== '0' ? `زبون طاولة #${tableNumber} (${shortId})` : `زبون خارجي (${shortId})`),
-      customerPhone: deliveryData?.phone || '', deliveryAddress: deliveryData?.address || '', deliveryData,
-      createdAt: new Date(), driverName: null, driverId: null, isClaimed: false, orderNumber, orderNumberDate,
-    });
+    tx.create(orderRef, { restaurantId, customerId: auth.uid, items, tableNumber, status: 'pending', totalAmount, customerName: deliveryData?.name || (tableNumber !== '0' ? `زبون طاولة #${tableNumber} (${shortId})` : `زبون خارجي (${shortId})`), customerPhone: deliveryData?.phone || '', deliveryAddress: deliveryData?.address || '', deliveryData, createdAt: new Date(), driverName: null, driverId: null, isClaimed: false, orderNumber, orderNumberDate });
   });
   return { ok: true, orderId: orderRef.id, orderNumber, orderNumberDate };
 });
