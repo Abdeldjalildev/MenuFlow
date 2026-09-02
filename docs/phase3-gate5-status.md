@@ -4,6 +4,7 @@ Status: **VERIFIED — CI regression/security suite passed**
 
 ## Verification matrix
 
+- Gate 1 canonical tenant paths: merchant recipe/inventory runtime paths and menu publication are covered by dedicated regression checks.
 - Order lifecycle: supported role-owned transitions exercised against the Firestore Emulator.
 - Illegal transitions: rejected for operational roles.
 - Role boundaries: cross-role lifecycle transitions rejected.
@@ -17,7 +18,7 @@ Status: **VERIFIED — CI regression/security suite passed**
 
 ## CI evidence
 
-The successful GitHub Actions run for the Gate 2–5 branch head reported:
+The previously successful GitHub Actions run for the Gate 2–5 branch head reported:
 
 - Firestore security regression suite: **24/24 passed**.
 - Gate 4 regression suite: **5/5 passed**.
@@ -28,6 +29,10 @@ The successful GitHub Actions run for the Gate 2–5 branch head reported:
 - Firebase Functions Node 20 validation: **passed**.
 - `git diff --check`: **passed**.
 
+The newly added Gate 1 regression is now part of the full `npm test` command. A new CI run is required to attach fresh green evidence to that addition; no new CI success is claimed until GitHub Actions completes it.
+
 ## Production boundary
 
 This gate verifies the repository's security and regression boundary through the emulator and CI. It does not claim successful production Cloud Function execution. The previously recorded Firebase billing requirement still blocks the production cutover workflow, and that remains explicitly outside this verification claim.
+
+A live high-contention production test must be performed only after production execution is enabled. Legacy production documents requiring migration remain a separate controlled operational task.
