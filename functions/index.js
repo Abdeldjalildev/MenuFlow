@@ -133,10 +133,12 @@ exports.transitionOrder = onCall(async (request) => {
       const deductions = new Map();
       for (const item of Array.isArray(order.items) ? order.items : []) {
         const recipeId = item?.recipeId, qty = Number(item?.quantity ?? item?.qty ?? 1);
-        if (!isNonEmptyString(recipeId) || !Number.isFinite(qty) || qty <= 0) continue;
+        if (!isNonEmptyString(recipeId)) throw new HttpsError('failed-precondition', 'Every order item must reference a recipe before preparation.');
+        if (!Number.isFinite(qty) || qty <= 0) throw new HttpsError('failed-precondition', 'Order item quantity is invalid.');
         const recipeRef = db.doc(`restaurants/${effectiveRestaurant}/recipes/${recipeId}`), recipeSnap = await tx.get(recipeRef);
         if (!recipeSnap.exists) throw new HttpsError('failed-precondition', `Recipe ${recipeId} not found.`);
         const ingredients = Array.isArray(recipeSnap.data()?.recipeIngredients) ? recipeSnap.data().recipeIngredients : [];
+        if (ingredients.length === 0) throw new HttpsError('failed-precondition', `Recipe ${recipeId} has no ingredients.`);
         for (const rawIngredient of ingredients) {
           const ingredient = normalizeIngredient(rawIngredient);
           if (!ingredient) throw new HttpsError('failed-precondition', `Recipe ${recipeId} has an invalid ingredient.`);
