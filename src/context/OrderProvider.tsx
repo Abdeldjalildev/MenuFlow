@@ -1,6 +1,7 @@
 import React, { createContext, useEffect, useMemo, useState } from 'react';
 import { auth, db } from '../firebase';
 import { ensureAnonymousCustomer } from '../services/customerAuth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { addDoc, collection, doc, getDoc, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 
@@ -9,11 +10,10 @@ interface FirestoreTimestamp { toDate(): Date; seconds: number; nanoseconds: num
 export interface DeliveryData { name?: string; address?: string; phone?: string }
 export interface OrderItem { id?: string; menuItemId?: string; recipeId?: string | null; name?: string | Record<string, string>; nameAr?: string; price?: number; originalPrice?: number; unitPrice?: number; quantity?: number; qty?: number; note?: string; notes?: string; image?: string; isAppended?: boolean }
 export interface PlaceOrderExtraOptions { customerId?: string; appliedDiscountPercent?: number; restaurantId?: string; driverName?: string; driverPhone?: string }
-export interface Order { id: string; restaurantId?: string; items: OrderItem[]; tableNumber: string; status: OrderStatus; createdAt?: FirestoreTimestamp | string | number; orderNumber?: number; totalAmount?: number; totalPrice?: number; customerId?: string; customerName?: string | Record<string, string>; customerPhone?: string; deliveryAddress?: string | Record<string, string>; deliveryData?: DeliveryData | null; isClaimed?: boolean; driverId?: string; driverName?: string; driverPhone?: string; appliedDiscountPercent?: number; rating?: number; comment?: string }
+export interface Order { id: string; restaurantId?: string; items: OrderItem[]; tableNumber: string; status: OrderStatus; createdAt?: FirestoreTimestamp | string | number; orderNumber?: number; totalAmount?: number; totalPrice?: number; customerId?: string; customerName?: string | Record<string, string>; customerPhone?: string; deliveryAddress?: string | Record<string, string>; deliveryData?: DeliveryData | null; isClaimed?: boolean; driverId?: string; driverName?: string; driverPhone?: string; appliedDiscountPercent?: number; rating?: number; comment?: string; inventoryDeducted?: boolean }
 interface OrderContextType { orders: Order[]; placeOrder: (items: OrderItem[], tableNumber: string, deliveryData?: DeliveryData | null, totalAmount?: number, extraOptions?: PlaceOrderExtraOptions) => Promise<void>; appendToOrder: (orderId: string, newItems: OrderItem[]) => Promise<void>; updateOrderStatus: (orderId: string, newStatus: OrderStatus) => Promise<void>; addReview: (orderId: string, rating: number, comment: string) => Promise<void>; claimOrderForDriver: (orderId: string, driverId: string, driverName: string) => Promise<{ success: boolean; message?: string; error?: unknown }> }
 const defaultContext: OrderContextType = { orders: [], placeOrder: async () => {}, appendToOrder: async () => {}, updateOrderStatus: async () => {}, addReview: async () => {}, claimOrderForDriver: async () => ({ success: false, message: 'OrderContext not initialized' }) };
 export const OrderContext = createContext<OrderContextType>(defaultContext);
-const toJsDate = (value?: FirestoreTimestamp | string | number) => value && typeof value === 'object' && 'toDate' in value ? value.toDate() : new Date(value as string | number);
 const getRestaurantId = () => new URLSearchParams(window.location.search).get('restaurantId') || localStorage.getItem('restaurantId') || 'default_restaurant';
 
 export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -23,58 +23,50 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const restaurantId = getRestaurantId();
 
   useEffect(() => onAuthStateChanged(auth, next => { setUser(next); setAuthReady(true); }), []);
-
   useEffect(() => {
     if (!authReady) return;
-    let cancelled = false;
-    let unsubscribe: (() => void) | undefined;
+    let cancelled = false; let unsubscribe: (() => void) | undefined;
     const start = async () => {
       let currentUser = user;
-      if (!currentUser) {
-        try { currentUser = await ensureAnonymousCustomer(); } catch (error) { console.error('Unable to establish Firebase customer identity:', error); return; }
-      }
+      if (!currentUser) { try { currentUser = await ensureAnonymousCustomer(); } catch (error) { console.error('Unable to establish Firebase customer identity:', error); return; } }
       if (cancelled) return;
       if (currentUser.isAnonymous) {
         const customerOrders = query(collection(db, 'restaurants', restaurantId, 'orders'), where('customerId', '==', currentUser.uid), orderBy('createdAt', 'desc'));
-        unsubscribe = onSnapshot(customerOrders, snapshot => { if (!cancelled) setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }) as Order)); }, error => console.error('Customer order listener failed:', error));
-        return;
+        unsubscribe = onSnapshot(customerOrders, snapshot => { if (!cancelled) setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }) as Order)); }, error => console.error('Customer order listener failed:', error)); return;
       }
-      const token = await currentUser.getIdTokenResult();
-      const role = token.claims.role;
-      const claimRestaurantId = typeof token.claims.restaurantId === 'string' ? token.claims.restaurantId : undefined;
-      const targetRestaurant = claimRestaurantId || restaurantId;
+      const token = await currentUser.getIdTokenResult(); const role = token.claims.role; const claimRestaurantId = typeof token.claims.restaurantId === 'string' ? token.claims.restaurantId : undefined; const targetRestaurant = claimRestaurantId || restaurantId;
       if (!['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery'].includes(String(role))) return;
       const staffOrders = query(collection(db, 'restaurants', targetRestaurant, 'orders'), orderBy('createdAt', 'desc'));
       unsubscribe = onSnapshot(staffOrders, snapshot => { if (!cancelled) setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }) as Order)); }, error => console.error('Staff order listener failed:', error));
     };
-    start();
-    return () => { cancelled = true; unsubscribe?.(); };
+    start(); return () => { cancelled = true; unsubscribe?.(); };
   }, [authReady, user, restaurantId]);
 
   const placeOrder = async (items: OrderItem[], tableNumber: string, deliveryData?: DeliveryData | null, totalAmount?: number, extraOptions?: PlaceOrderExtraOptions) => {
     if (!items?.length) return;
-    const currentUser = auth.currentUser?.isAnonymous ? auth.currentUser : await ensureAnonymousCustomer();
-    const targetRestaurant = extraOptions?.restaurantId || restaurantId;
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const nextOrderNumber = orders.filter(o => toJsDate(o.createdAt) >= today).length + 1;
+    const currentUser = auth.currentUser?.isAnonymous ? auth.currentUser : await ensureAnonymousCustomer(); const targetRestaurant = extraOptions?.restaurantId || restaurantId;
     const calculatedTotal = totalAmount ?? items.reduce((sum, item) => sum + Number(item.price || item.unitPrice || 0) * Number(item.quantity || item.qty || 1), 0);
     const shortId = currentUser.uid.slice(-4);
-    await addDoc(collection(db, 'restaurants', targetRestaurant, 'orders'), {
-      restaurantId: targetRestaurant, customerId: currentUser.uid, items, tableNumber: tableNumber || '0', status: 'pending', totalAmount: calculatedTotal,
-      customerName: deliveryData?.name || (tableNumber !== '0' ? `زبون طاولة #${tableNumber} (${shortId})` : `زبون خارجي (${shortId})`), customerPhone: deliveryData?.phone || '', deliveryAddress: deliveryData?.address || '', deliveryData: deliveryData || null,
-      createdAt: serverTimestamp(), orderNumber: nextOrderNumber, driverName: extraOptions?.driverName || null, driverId: null, isClaimed: false,
-    });
+    // Order numbers are intentionally not assigned client-side. The authoritative sequence is a server concern and is kept out of this write path.
+    await addDoc(collection(db, 'restaurants', targetRestaurant, 'orders'), { restaurantId: targetRestaurant, customerId: currentUser.uid, items, tableNumber: tableNumber || '0', status: 'pending', totalAmount: calculatedTotal, customerName: deliveryData?.name || (tableNumber !== '0' ? `زبون طاولة #${tableNumber} (${shortId})` : `زبون خارجي (${shortId})`), customerPhone: deliveryData?.phone || '', deliveryAddress: deliveryData?.address || '', deliveryData: deliveryData || null, createdAt: serverTimestamp(), driverName: extraOptions?.driverName || null, driverId: null, isClaimed: false });
   };
 
   const appendToOrder = async (orderId: string, newItems: OrderItem[]) => {
-    const ref = doc(db, 'restaurants', restaurantId, 'orders', orderId); const snap = await getDoc(ref); if (!snap.exists()) throw new Error('Order not found');
-    const data = snap.data() as Order; const appended = newItems.map(item => ({ ...item, isAppended: true }));
-    const total = Number(data.totalAmount || data.totalPrice || 0) + appended.reduce((s, i) => s + Number(i.price || 0) * Number(i.quantity || i.qty || 1), 0);
-    await updateDoc(ref, { items: [...(data.items || []), ...appended], totalAmount: total });
+    const ref = doc(db, 'restaurants', restaurantId, 'orders', orderId);
+    await runTransaction(db, async tx => {
+      const snap = await tx.get(ref); if (!snap.exists()) throw new Error('Order not found');
+      const data = snap.data() as Order; const appended = newItems.map(item => ({ ...item, isAppended: true }));
+      const total = Number(data.totalAmount || data.totalPrice || 0) + appended.reduce((s, i) => s + Number(i.price || 0) * Number(i.quantity || i.qty || 1), 0);
+      tx.update(ref, { items: [...(data.items || []), ...appended], totalAmount: total, updatedAt: serverTimestamp() });
+    });
   };
-  const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => { await updateDoc(doc(db, 'restaurants', restaurantId, 'orders', orderId), { status: newStatus, ...(newStatus === 'completed' ? { isPaid: true } : {}) }); };
+  const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
+    const functions = getFunctions();
+    const transitionOrder = httpsCallable(functions, 'transitionOrder');
+    await transitionOrder({ orderId, newStatus, restaurantId });
+  };
   const claimOrderForDriver = async (orderId: string, driverId: string, driverName: string) => {
-    try { const ref = doc(db, 'restaurants', restaurantId, 'orders', orderId); const result = await runTransaction(db, async tx => { const snap = await tx.get(ref); if (!snap.exists()) return { success: false, message: 'Order not found' }; const data = snap.data() as Order; if (data.isClaimed && data.driverId && data.driverId !== driverId) return { success: false, message: 'Order already claimed by another driver' }; tx.update(ref, { isClaimed: true, driverId, driverName, status: data.status === 'preparing' ? 'driver_claimed' : data.status }); return { success: true }; }); return result; } catch (error) { return { success: false, error }; }
+    try { const ref = doc(db, 'restaurants', restaurantId, 'orders', orderId); const result = await runTransaction(db, async tx => { const snap = await tx.get(ref); if (!snap.exists()) return { success: false, message: 'Order not found' }; const data = snap.data() as Order; if (data.isClaimed && data.driverId && data.driverId !== driverId) return { success: false, message: 'Order already claimed by another driver' }; tx.update(ref, { isClaimed: true, driverId, driverName, status: data.status === 'preparing' ? 'driver_claimed' : data.status, updatedAt: serverTimestamp() }); return { success: true }; }); return result; } catch (error) { return { success: false, error }; }
   };
   const addReview = async (orderId: string, rating: number, comment: string) => {
     const currentUser = auth.currentUser; if (!currentUser?.isAnonymous) throw new Error('Customer authentication required'); if (rating < 1 || rating > 5) throw new Error('Rating must be between 1 and 5');
