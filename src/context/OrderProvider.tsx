@@ -1,4 +1,4 @@
-import React, { createContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useEffect, useState } from 'react';
 import { auth, db } from '../firebase';
 import { ensureAnonymousCustomer } from '../services/customerAuth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -29,7 +29,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [authReady, user, restaurantId]);
   const placeOrder = async (items: OrderItem[], tableNumber: string, deliveryData?: DeliveryData | null, totalAmount?: number, extraOptions?: PlaceOrderExtraOptions) => {
     if (!items?.length) return;
-    const currentUser = auth.currentUser?.isAnonymous ? auth.currentUser : await ensureAnonymousCustomer();
+    await ensureAnonymousCustomer();
     const targetRestaurant = extraOptions?.restaurantId || restaurantId;
     const calculatedTotal = totalAmount ?? items.reduce((sum, item) => sum + Number(item.price || item.unitPrice || 0) * Number(item.quantity || item.qty || 1), 0);
     // Order creation and daily numbering are server-authoritative and atomic.
@@ -40,6 +40,6 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => { const transitionOrder = httpsCallable(getFunctions(), 'transitionOrder'); await transitionOrder({ orderId, newStatus, restaurantId }); };
   const claimOrderForDriver = async (orderId: string, driverId: string, driverName: string) => { try { const ref = doc(db, 'restaurants', restaurantId, 'orders', orderId); const result = await runTransaction(db, async tx => { const snap = await tx.get(ref); if (!snap.exists()) return { success: false, message: 'Order not found' }; const data = snap.data() as Order; if (data.isClaimed && data.driverId && data.driverId !== driverId) return { success: false, message: 'Order already claimed by another driver' }; if (data.isClaimed && data.driverId === driverId) return { success: true, message: 'Order already claimed by this driver' }; tx.update(ref, { isClaimed: true, driverId, driverName, status: data.status === 'preparing' ? 'driver_claimed' : data.status, updatedAt: serverTimestamp() }); return { success: true }; }); return result; } catch (error) { return { success: false, error }; } };
   const addReview = async (orderId: string, rating: number, comment: string) => { const currentUser = auth.currentUser; if (!currentUser?.isAnonymous) throw new Error('Customer authentication required'); if (rating < 1 || rating > 5) throw new Error('Rating must be between 1 and 5'); const orderRef = doc(db, 'restaurants', restaurantId, 'orders', orderId); const orderSnap = await getDoc(orderRef); if (!orderSnap.exists() || (orderSnap.data() as Order).customerId !== currentUser.uid) throw new Error('Order ownership verification failed'); await addDoc(collection(db, 'restaurants', restaurantId, 'reviews'), { restaurantId, orderId, rating, comment: comment.slice(0, 1000), createdAt: serverTimestamp() }); };
-  const value = useMemo(() => ({ orders, placeOrder, appendToOrder, updateOrderStatus, addReview, claimOrderForDriver }), [orders]);
+  const value = { orders, placeOrder, appendToOrder, updateOrderStatus, addReview, claimOrderForDriver };
   return <OrderContext.Provider value={value}>{children}</OrderContext.Provider>;
 };
