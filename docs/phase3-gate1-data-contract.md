@@ -2,9 +2,9 @@
 
 ## Status
 
-Gate 1 is being implemented incrementally on `automation/ci-pipeline`.
+**VERIFIED — repository runtime contract and regression coverage complete.**
 
-Phase 2 production verification remains **PENDING / externally blocked** by Google Cloud billing activation. This does not change the Phase 3 code branch or its data-model work. Phase 2 must not be described as production-verified until the real production workflow succeeds.
+Phase 2 production verification remains **PENDING / externally blocked** by Google Cloud billing activation. This does not change the Phase 3 repository implementation. Phase 2 must not be described as production-verified until the real production workflow succeeds.
 
 ## Canonical tenant boundary
 
@@ -38,7 +38,7 @@ Top-level collections with the same business meaning are legacy and must not be 
 /customers
 ```
 
-The Firestore rules already deny the legacy top-level operational collections. Phase 3 Gate 1 therefore treats tenant-scoped paths as the only supported runtime contract.
+The Firestore rules deny the legacy top-level operational collections. The application runtime therefore uses tenant-scoped paths as the supported contract.
 
 ## Entity contracts
 
@@ -48,14 +48,12 @@ Required identity/ownership:
 - Firestore document ID is the inventory item ID.
 - `restaurantId` identifies the owning restaurant.
 
-Current compatibility fields retained during the migration:
+Compatibility fields retained during migration:
 - `itemName` / `name`
 - `currentQuantity` / `quantity`
 - `unit`
 - `minRequired` (with legacy `minQuantity` / `minOrderQuantity` tolerated by the UI)
 - `createdAt`, `updatedAt`
-
-Gate 1 does not perform destructive data migration of existing production documents. Runtime writes are moved to the canonical tenant path first.
 
 ### Recipe
 
@@ -66,7 +64,7 @@ restaurants/{restaurantId}/recipes/{recipeId}
 recipeIngredients: [{ inventoryItemId, quantity }]
 ```
 
-A recipe may reference a published `menuItems/{menuItemId}` document through `menuItemId`.
+A recipe may reference its published `menuItems/{menuItemId}` document through `menuItemId`.
 
 ### Category
 
@@ -76,8 +74,6 @@ Categories are restaurant-owned:
 restaurants/{restaurantId}/categories/{categoryId}
 ```
 
-The category ID stored in a recipe/menu item is the category document ID (or one of the existing built-in category keys).
-
 ### Menu item
 
 The customer-facing canonical menu entity is:
@@ -86,36 +82,32 @@ The customer-facing canonical menu entity is:
 restaurants/{restaurantId}/menuItems/{menuItemId}
 ```
 
-It carries the customer-facing localized name/description, price, image, category, availability, and optional `recipeId` reference.
+It carries localized customer-facing content, price, image, category, availability, and the optional `recipeId` reference.
 
-## Relationship map
+## Repository verification completed
 
-```text
-Restaurant
- ├── InventoryItem
- │     └── referenced by Recipe.recipeIngredients[].inventoryItemId
- ├── Category
- │     └── referenced by Recipe.category / MenuItem.category
- ├── Recipe
- │     └── optionally published as MenuItem via Recipe.menuItemId
- └── MenuItem
-       └── optionally references Recipe via recipeId
-```
+- `Inventory.tsx` reads and writes only `restaurants/{restaurantId}/inventory`.
+- `Recipes.tsx` reads recipes, inventory, and categories only from tenant-scoped collections.
+- Recipe create/update/delete operations use `restaurants/{restaurantId}/recipes`.
+- Recipe publication, update, hide/show, and delete operations use `restaurants/{restaurantId}/menuItems`.
+- Recipe ingredients use stable `inventoryItemId` document IDs.
+- A dedicated Gate 1 regression test now guards the canonical paths and rejects legacy top-level runtime references.
+- The Gate 1 regression is part of the repository's full `npm test` suite.
 
-## Explicit Gate 1 follow-up items
+## Production data boundary
 
-1. Inventory UI runtime path: **DONE** — reads/writes now target `restaurants/{restaurantId}/inventory`.
-2. Recipe UI runtime path: **INCOMPLETE** — the current `Recipes.tsx` still contains legacy top-level recipe/inventory/category/menu references and requires a complete path migration.
-3. Menu publication path: **INCOMPLETE** — publication must use `restaurants/{restaurantId}/menuItems`, not a top-level `menu` collection.
-4. Existing production legacy documents: **DEFERRED** — no destructive migration is performed in Gate 1; a controlled migration/backfill must be designed and executed before relying on old documents.
-5. Order document contract: **BASELINE DEFINED** — current order fields remain the compatibility contract; lifecycle mutability and inventory side effects are intentionally deferred to Gates 2–4.
+Existing legacy production documents are **not** destructively migrated by this gate. This is intentional: code-level canonicalization and production data migration are separate concerns.
+
+A controlled migration/backfill remains a production-operational task if legacy documents exist in the real Firebase project. It requires backup, review of actual data, execution against the production project, and post-migration verification. No such migration is claimed here.
+
+## Gate 1 conclusion
+
+Gate 1 is **closed for repository implementation and automated regression scope**. The remaining production-data migration is explicitly outside the repository gate and must not be treated as evidence that the code contract is incomplete.
 
 ## Non-goals for Gate 1
 
-- No order state-machine enforcement.
-- No inventory deduction implementation.
-- No concurrency-safe order numbering implementation.
-- No broad UI redesign.
-- No production data deletion.
-
-These belong to later Phase 3 gates.
+- Order state-machine enforcement (Gate 2).
+- Inventory deduction implementation (Gate 3).
+- Concurrency-safe order numbering (Gate 4).
+- Broad UI redesign.
+- Destructive production data migration.
