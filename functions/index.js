@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore } = require('firebase-admin/firestore');
 const { initializeApp } = require('firebase-admin/app');
+const { getOrderNumberDate, getNextOrderNumber } = require('./orderNumber');
 
 initializeApp();
 
@@ -54,10 +55,6 @@ function normalizeIngredient(recipeIngredient) {
   return { inventoryItemId, quantity };
 }
 
-function getOrderNumberDate() {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-}
-
 function normalizeOrderItems(items) {
   if (!Array.isArray(items) || items.length === 0 || items.length > 50) throw new HttpsError('invalid-argument', 'Order items must contain between 1 and 50 items.');
   return items.map(item => {
@@ -97,8 +94,7 @@ exports.createOrder = onCall(async (request) => {
   let orderNumber;
   await db.runTransaction(async tx => {
     const counterSnap = await tx.get(counterRef);
-    const currentNextNumber = counterSnap.exists ? Number(counterSnap.data()?.nextNumber) : 1;
-    if (!Number.isInteger(currentNextNumber) || currentNextNumber < 1) throw new HttpsError('failed-precondition', 'Order number counter is invalid.');
+    const currentNextNumber = getNextOrderNumber(counterSnap.exists ? counterSnap.data() : null);
     orderNumber = currentNextNumber;
     tx.set(counterRef, { nextNumber: orderNumber + 1, date: orderNumberDate, updatedAt: new Date() }, { merge: true });
     const shortId = auth.uid.slice(-4);
