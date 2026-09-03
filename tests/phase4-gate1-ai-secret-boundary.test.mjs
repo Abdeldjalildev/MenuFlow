@@ -14,8 +14,8 @@ const functionsPackage = await readFile('functions/package.json', 'utf8');
   assert.doesNotMatch(frontendService, /generativelanguage\.googleapis\.com/);
 });
 
-test('customer AI UI keeps its existing service contract', () => {
-  assert.match(aiComponent, /getAIResponse\(contextAwarePrompt, menuItems\)/);
+test('customer AI UI keeps its service contract with tenant context', () => {
+  assert.match(aiComponent, /getAIResponse\(contextAwarePrompt, menuItems, currentRestaurantId\)/);
   assert.doesNotMatch(aiComponent, /VITE_API_KEY|VITE_GEMINI|generativelanguage\.googleapis\.com/);
 });
 
