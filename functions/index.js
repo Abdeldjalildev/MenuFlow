@@ -85,12 +85,16 @@ exports.aiAssistant = onCall({ secrets: [geminiApiKey] }, async (request) => {
     throw new HttpsError('failed-precondition', 'AI service is not configured.');
   }
 
-  const prompt = `أنت مساعد مطعم خبير. هذه هي قائمة الطعام: ${JSON.stringify(menuItems)}. الزبون يقول: "${userPrompt}". أجب باختصار.`;
-
   try {
-    const text = await generateGeminiResponse(apiKey, prompt);
+    const text = await generateGeminiResponse(apiKey, userPrompt, menuItems, `${restaurantId}:${request.auth.uid}`);
     return { text };
   } catch (error) {
+    if (error?.code === 'AI_RATE_LIMITED') {
+      throw new HttpsError('resource-exhausted', 'AI request rate limit exceeded.');
+    }
+    if (typeof error?.message === 'string' && error.message.startsWith('AI ')) {
+      throw new HttpsError('invalid-argument', error.message);
+    }
     console.error('فشل الاتصال بخدمة الذكاء الاصطناعي:', error);
     throw new HttpsError('internal', 'Unable to reach the AI service.');
   }
