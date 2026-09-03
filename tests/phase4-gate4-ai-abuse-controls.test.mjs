@@ -5,7 +5,7 @@ import test from 'node:test';
 const source = await readFile('functions/aiProvider.js', 'utf8');
 
 test('Gate 4 defines bounded AI input limits', () => {
-  assert.match(source, /MAX_PROMPT_LENGTH\s*=\s*4000/);
+  assert.match(source, /MAX_PROMPT_LENGTH\s*=\s*12000/);
   assert.match(source, /MAX_MENU_ITEMS\s*=\s*100/);
   assert.match(source, /MAX_MENU_PAYLOAD_LENGTH\s*=\s*60000/);
 });
