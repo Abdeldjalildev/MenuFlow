@@ -12,8 +12,8 @@ const aiComponent = await readFile('src/components/customer/AiChat.tsx', 'utf8')
 test('Gate 2 keeps the AI provider behind the trusted callable', () => {
   assert.match(functionsIndex, /exports\.aiAssistant\s*=\s*onCall\(\{ secrets: \[geminiApiKey\] \}/);
   assert.match(functionsIndex, /require\(['"]\.\/aiProvider['"]\)/);
-  assert.match(functionsIndex, /generateGeminiResponse\(apiKey, prompt\)/);
-  assert.match(aiProvider, /async function generateGeminiResponse\(apiKey, prompt\)/);
+  assert.match(functionsIndex, /generateGeminiResponse\(apiKey, userPrompt, menuItems, /);
+  assert.match(aiProvider, /async function generateGeminiResponse\(apiKey, prompt, menuItems, rateKey\)/);
   assert.match(aiProvider, /AbortController/);
   assert.match(aiProvider, /GEMINI_TIMEOUT_MS\s*=\s*15000/);
   assert.doesNotMatch(aiProvider, /import\.meta\.env|VITE_API_KEY|VITE_GEMINI/);
