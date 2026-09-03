@@ -6,808 +6,105 @@ import { useOutletContext } from 'react-router-dom';
 import { translations } from '../../../utils/translations/merchantTranslations';
 
 type Language = 'ar' | 'fr' | 'en';
-interface RecipesProps {
-  lang?: Language;
-}
-
-interface RecipeIngredient {
-  inventoryItemId: string;
-  quantity: number;
-}
-
-interface Recipe {
-  id: string;
-  nameAr: string;
-  nameFr?: string;
-  nameEn?: string;
-  category: string;
-  cost: number;
-  price: number;
-  ingredients: string;
-  ingredientsFr?: string;
-  ingredientsEn?: string;
-  imageUrl?: string;
-  recipeIngredients?: RecipeIngredient[]; 
-  isPublished?: boolean;
-  menuItemId?: string;
-  isHidden?: boolean;
-  inventoryItemId?: string;
-  quantityPerUnit?: number;
-}
-
-interface InventoryItem {
-  id: string;
-  itemName?: string;
-  name?: string;
-  unit?: string;
-}
-
-interface Category {
-  id: string;
-  restaurantId?: string;
-  ar?: string;
-  fr?: string;
-  en?: string;
-  createdAt?: unknown;
-}
+interface RecipesProps { lang?: Language; }
+interface RecipeIngredient { inventoryItemId: string; quantity: number; }
+interface Recipe { id: string; nameAr: string; nameFr?: string; nameEn?: string; category: string; cost: number; price: number; ingredients: string; ingredientsFr?: string; ingredientsEn?: string; imageUrl?: string; recipeIngredients?: RecipeIngredient[]; isPublished?: boolean; menuItemId?: string; isHidden?: boolean; inventoryItemId?: string; quantityPerUnit?: number; }
+interface InventoryItem { id: string; itemName?: string; name?: string; unit?: string; }
+interface Category { id: string; restaurantId?: string; ar?: string; fr?: string; en?: string; createdAt?: unknown; }
 
 export const Recipes: React.FC<RecipesProps> = (props) => {
   const outletContext = useOutletContext<{ lang: Language }>() || {};
   const lang = props.lang || outletContext.lang || 'ar';
   const t = translations[lang].recipes;
-
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
-  
   const restaurantId = localStorage.getItem('restaurantId') || 'default_restaurant';
-  const [inputLang, setInputLang] = useState<'ar' | 'fr' | 'en'>('ar');
-
-  const initialFormState = {
-    nameAr: '',
-    nameFr: '',
-    nameEn: '',
-    category: t.categories?.main || 'main',
-    cost: 0,
-    price: 0,
-    ingredients: '',
-    ingredientsFr: '',
-    ingredientsEn: '',
-    imageUrl: '',
-    recipeIngredients: [{ inventoryItemId: '', quantity: 0.1 }]
-  };
-
+  const [inputLang, setInputLang] = useState<'ar' | 'en' | 'fr'>('ar');
+  const initialFormState = { nameAr: '', nameFr: '', nameEn: '', category: t.categories?.main || 'main', cost: 0, price: 0, ingredients: '', ingredientsFr: '', ingredientsEn: '', imageUrl: '', recipeIngredients: [{ inventoryItemId: '', quantity: 0.1 }] };
   const [newRecipe, setNewRecipe] = useState(initialFormState);
-
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
-  const [newCatAr, setNewCatAr] = useState('');
-  const [newCatFr, setNewCatFr] = useState('');
-  const [newCatEn, setNewCatEn] = useState('');
+  const [newCatAr, setNewCatAr] = useState(''); const [newCatFr, setNewCatFr] = useState(''); const [newCatEn, setNewCatEn] = useState('');
   const [categoriesList, setCategoriesList] = useState<Category[]>([]);
 
-  const handleAddIngredientRow = () => {
-    setNewRecipe(prev => ({
-      ...prev,
-      recipeIngredients: [...(prev.recipeIngredients || []), { inventoryItemId: '', quantity: 0.1 }]
-    }));
-  };
-
-  const handleRemoveIngredientRow = (index: number) => {
-    setNewRecipe(prev => ({
-      ...prev,
-      recipeIngredients: prev.recipeIngredients?.filter((_, i) => i !== index)
-    }));
-  };
-
-  const handleIngredientChange = (index: number, field: keyof RecipeIngredient, value: string | number) => {
-    setNewRecipe(prev => {
-      const updated = [...(prev.recipeIngredients || [])];
-      updated[index] = { ...updated[index], [field]: value };
-      return { ...prev, recipeIngredients: updated };
-    });
-  };
-
+  const handleAddIngredientRow = () => setNewRecipe(prev => ({ ...prev, recipeIngredients: [...(prev.recipeIngredients || []), { inventoryItemId: '', quantity: 0.1 }] }));
+  const handleRemoveIngredientRow = (index: number) => setNewRecipe(prev => ({ ...prev, recipeIngredients: prev.recipeIngredients?.filter((_, i) => i !== index) }));
+  const handleIngredientChange = (index: number, field: keyof RecipeIngredient, value: string | number) => setNewRecipe(prev => { const updated = [...(prev.recipeIngredients || [])]; updated[index] = { ...updated[index], [field]: value }; return { ...prev, recipeIngredients: updated }; });
 
   useEffect(() => {
-    const q = query(collection(db, 'recipes'), where('restaurantId', '==', restaurantId));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setRecipes(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Recipe)));
-    });
+    const q = query(collection(db, 'restaurants', restaurantId, 'recipes'), where('restaurantId', '==', restaurantId));
+    const unsubscribe = onSnapshot(q, snapshot => setRecipes(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Recipe))));
+    return () => unsubscribe();
+  }, [restaurantId]);
+  useEffect(() => {
+    const q = query(collection(db, 'restaurants', restaurantId, 'inventory'));
+    const unsubscribe = onSnapshot(q, snapshot => setInventoryItems(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as InventoryItem))));
+    return () => unsubscribe();
+  }, [restaurantId]);
+  useEffect(() => {
+    const q = query(collection(db, 'restaurants', restaurantId, 'categories'), where('restaurantId', '==', restaurantId));
+    const unsubscribe = onSnapshot(q, snapshot => setCategoriesList(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
     return () => unsubscribe();
   }, [restaurantId]);
 
-  useEffect(() => {
-    const q = query(collection(db, 'inventory'), where('restaurantId', '==', restaurantId));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setInventoryItems(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as InventoryItem)));
-    });
-    return () => unsubscribe();
-  }, [restaurantId]);
-
-  useEffect(() => {
-    const q = query(collection(db, 'categories'), where('restaurantId', '==', restaurantId));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setCategoriesList(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
-    });
-    return () => unsubscribe();
-  }, [restaurantId]);
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert(t.imageSizeAlert || 'حجم الصورة كبير جداً، يرجى اختيار صورة أقل من 2 ميغابايت');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setNewRecipe((prev) => ({
-          ...prev,
-          imageUrl: reader.result as string
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { alert(t.imageSizeAlert || 'حجم الصورة كبير جداً، يرجى اختيار صورة أقل من 2 ميغابايت'); return; }
+    const reader = new FileReader(); reader.onloadend = () => setNewRecipe(prev => ({ ...prev, imageUrl: reader.result as string })); reader.readAsDataURL(file);
   };
-
   const handleEditClick = (recipe: Recipe) => {
-    setEditingRecipeId(recipe.id);
-    setNewRecipe({
-      nameAr: recipe.nameAr || '',
-      nameFr: recipe.nameFr || '',
-      nameEn: recipe.nameEn || '',
-      category: recipe.category || t.categories?.main || '',
-      cost: recipe.cost || 0,
-      price: recipe.price || 0,
-      ingredients: recipe.ingredients || '',
-      ingredientsFr: recipe.ingredientsFr || '',
-      ingredientsEn: recipe.ingredientsEn || '',
-      imageUrl: recipe.imageUrl || '',
-      recipeIngredients: recipe.recipeIngredients && recipe.recipeIngredients.length > 0 
-        ? recipe.recipeIngredients 
-        : [{ inventoryItemId: '', quantity: 0.1 }]
-    });
-    setShowAddModal(true);
+    setEditingRecipeId(recipe.id); setNewRecipe({ nameAr: recipe.nameAr || '', nameFr: recipe.nameFr || '', nameEn: recipe.nameEn || '', category: recipe.category || t.categories?.main || '', cost: recipe.cost || 0, price: recipe.price || 0, ingredients: recipe.ingredients || '', ingredientsFr: recipe.ingredientsFr || '', ingredientsEn: recipe.ingredientsEn || '', imageUrl: recipe.imageUrl || '', recipeIngredients: recipe.recipeIngredients?.length ? recipe.recipeIngredients : [{ inventoryItemId: '', quantity: 0.1 }] }); setShowAddModal(true);
   };
-
-  const handleCloseModal = () => {
-    setShowAddModal(false);
-    setEditingRecipeId(null);
-    setNewRecipe(initialFormState);
-    setInputLang('ar');
-    setIsAddingNewCategory(false);
-    setNewCatAr('');
-    setNewCatFr('');
-    setNewCatEn('');
-  };
+  const handleCloseModal = () => { setShowAddModal(false); setEditingRecipeId(null); setNewRecipe(initialFormState); setInputLang('ar'); setIsAddingNewCategory(false); setNewCatAr(''); setNewCatFr(''); setNewCatEn(''); };
 
   const handleSaveRecipe = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newRecipe.nameAr && !newRecipe.nameFr && !newRecipe.nameEn) return;
-    if (!newRecipe.price) return;
-
+    e.preventDefault(); if (!newRecipe.nameAr && !newRecipe.nameFr && !newRecipe.nameEn) return; if (!newRecipe.price) return;
     try {
       let finalCategory = newRecipe.category;
-      
-      if (isAddingNewCategory) {
-        if (newCatAr || newCatFr || newCatEn) {
-          const customCatId = newCatEn ? newCatEn.toLowerCase().replace(/\s+/g, '_') :` cat_${Date.now()}`;
-          
-          await addDoc(collection(db, 'categories'), {
-            id: customCatId,
-            restaurantId: restaurantId,
-            ar: newCatAr || newCatEn || 'تصنيف جديد',
-            fr: newCatFr || newCatEn || 'Nouveau',
-            en: newCatEn || newCatAr || 'New Category',
-            createdAt: serverTimestamp()
-          });
-          
-          finalCategory = customCatId;
-        }
+      if (isAddingNewCategory && (newCatAr || newCatFr || newCatEn)) {
+        const customCatId = newCatEn ? newCatEn.toLowerCase().replace(/\s+/g, '_') : `cat_${Date.now()}`;
+        await addDoc(collection(db, 'restaurants', restaurantId, 'categories'), { id: customCatId, restaurantId, ar: newCatAr || newCatEn || 'تصنيف جديد', fr: newCatFr || newCatEn || 'Nouveau', en: newCatEn || newCatAr || 'New Category', createdAt: serverTimestamp() });
+        finalCategory = customCatId;
       }
-
-      const payloadData = {
-        ...newRecipe,
-        restaurantId: restaurantId,
-        category: finalCategory,
-        cost: Number(newRecipe.cost || 0),
-        price: Number(newRecipe.price || 0),
-        updatedAt: serverTimestamp()
-      };
-
+      const payloadData = { ...newRecipe, restaurantId, category: finalCategory, cost: Number(newRecipe.cost || 0), price: Number(newRecipe.price || 0), updatedAt: serverTimestamp() };
       if (editingRecipeId) {
-        await updateDoc(doc(db, 'recipes', editingRecipeId), payloadData);
-
+        await updateDoc(doc(db, 'restaurants', restaurantId, 'recipes', editingRecipeId), payloadData);
         const targetRecipe = recipes.find(r => r.id === editingRecipeId);
-        if (targetRecipe && targetRecipe.menuItemId) {
-          await updateDoc(doc(db, 'menu', targetRecipe.menuItemId), {
-            name: {
-              ar: newRecipe.nameAr || newRecipe.nameFr || newRecipe.nameEn,
-              fr: newRecipe.nameFr || newRecipe.nameAr || newRecipe.nameEn,
-              en: newRecipe.nameEn || newRecipe.nameAr || newRecipe.nameFr
-            },
-            description: {
-              ar: newRecipe.ingredients || t.defaultDescription,
-              fr: newRecipe.ingredientsFr || newRecipe.ingredients || '',
-              en: newRecipe.ingredientsEn || newRecipe.ingredients || ''
-            },
-            price: Number(newRecipe.price || 0),
-            category: finalCategory,
-            image: newRecipe.imageUrl || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500'
-          });
-        }
+        if (targetRecipe?.menuItemId) await updateDoc(doc(db, 'restaurants', restaurantId, 'menuItems', targetRecipe.menuItemId), { name: { ar: newRecipe.nameAr || newRecipe.nameFr || newRecipe.nameEn, fr: newRecipe.nameFr || newRecipe.nameAr || newRecipe.nameEn, en: newRecipe.nameEn || newRecipe.nameAr || newRecipe.nameFr }, description: { ar: newRecipe.ingredients || t.defaultDescription, fr: newRecipe.ingredientsFr || newRecipe.ingredients || '', en: newRecipe.ingredientsEn || newRecipe.ingredients || '' }, price: Number(newRecipe.price || 0), category: finalCategory, image: newRecipe.imageUrl || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500' });
       } else {
-        await addDoc(collection(db, 'recipes'), {
-          ...payloadData,
-          isPublished: false,
-          isHidden: false,
-          createdAt: serverTimestamp()
-        });
+        await addDoc(collection(db, 'restaurants', restaurantId, 'recipes'), { ...payloadData, isPublished: false, isHidden: false, createdAt: serverTimestamp() });
       }
       handleCloseModal();
-    } catch (error) {
-      console.error("خطأ أثناء حفظ الوصفة:", error);
-    }
+    } catch (error) { console.error('خطأ أثناء حفظ الوصفة:', error); }
   };
 
-
-// استبدل منطق تحديد categoryKey في دالة handlePublishToMenu بهذا الشكل المباشر:
   const handlePublishToMenu = async (recipe: Recipe) => {
     if (recipe.isPublished) return;
     try {
       setPublishingId(recipe.id);
-      
-      // استخدام تصنيف الوصفة الفعلي كما هو (سواء كان مخصصاً أو أساسياً) لضمان التطابق التام مع واجهة العميل
       const exactCategory = recipe.category || 'burgers';
-
-      const payload = {
-        restaurantId: restaurantId,
-        name: { 
-          ar: recipe.nameAr || recipe.nameFr || recipe.nameEn || '', 
-          fr: recipe.nameFr || recipe.nameAr || recipe.nameEn || '', 
-          en: recipe.nameEn || recipe.nameAr || recipe.nameFr || '' 
-        },
-        description: { 
-          ar: recipe.ingredients || t.defaultDescription, 
-          fr: recipe.ingredientsFr || recipe.ingredients || '', 
-          en: recipe.ingredientsEn || recipe.ingredients || '' 
-        },
-        price: Number(recipe.price || 0),
-        image: recipe.imageUrl || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500',
-        category: exactCategory, // 👈 الاعتماد على التصنيف الحقيقي المخزون في الوصفة
-        attributes: { isVegetarian: false, isSpicy: false, isGlutenFree: false },
-        recipeId: recipe.id,
-        available: true,
-        createdAt: serverTimestamp()
-      };
-
-      const menuDocRef = await addDoc(collection(db, 'menu'), payload);
-
-      await updateDoc(doc(db, 'recipes', recipe.id), {
-        isPublished: true,
-        menuItemId: menuDocRef.id,
-        isHidden: false
-      });
-
-    } catch (error) {
-      console.error("خطأ أثناء النشر:", error);
-    } finally {
-      setPublishingId(null);
-    }
+      const payload = { restaurantId, name: { ar: recipe.nameAr || recipe.nameFr || recipe.nameEn || '', fr: recipe.nameFr || recipe.nameAr || recipe.nameEn || '', en: recipe.nameEn || recipe.nameAr || recipe.nameFr || '' }, description: { ar: recipe.ingredients || t.defaultDescription, fr: recipe.ingredientsFr || recipe.ingredients || '', en: recipe.ingredientsEn || recipe.ingredients || '' }, price: Number(recipe.price || 0), image: recipe.imageUrl || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500', category: exactCategory, attributes: { isVegetarian: false, isSpicy: false, isGlutenFree: false }, recipeId: recipe.id, available: true, createdAt: serverTimestamp() };
+      const menuDocRef = await addDoc(collection(db, 'restaurants', restaurantId, 'menuItems'), payload);
+      await updateDoc(doc(db, 'restaurants', restaurantId, 'recipes', recipe.id), { isPublished: true, menuItemId: menuDocRef.id, isHidden: false });
+    } catch (error) { console.error('خطأ أثناء النشر:', error); } finally { setPublishingId(null); }
   };
-
   const handleToggleHide = async (recipe: Recipe) => {
-    if (!recipe.menuItemId) return;
-    const newHiddenState = !recipe.isHidden;
-    try {
-      await updateDoc(doc(db, 'menu', recipe.menuItemId), {
-        available: !newHiddenState
-      });
-      await updateDoc(doc(db, 'recipes', recipe.id), {
-        isHidden: newHiddenState
-      });
-    } catch (error) {
-      console.error("خطأ أثناء تغيير حالة العرض:", error);
-    }
+    if (!recipe.menuItemId) return; const newHiddenState = !recipe.isHidden;
+    try { await updateDoc(doc(db, 'restaurants', restaurantId, 'menuItems', recipe.menuItemId), { available: !newHiddenState }); await updateDoc(doc(db, 'restaurants', restaurantId, 'recipes', recipe.id), { isHidden: newHiddenState }); } catch (error) { console.error('خطأ أثناء تغيير حالة العرض:', error); }
   };
-
   const handleDeleteRecipe = async (recipe: Recipe) => {
-    if (window.confirm(t.deleteConfirm)) {
-      try {
-        if (recipe.menuItemId) {
-          await deleteDoc(doc(db, 'menu', recipe.menuItemId));
-        }
-        await deleteDoc(doc(db, 'recipes', recipe.id));
-      } catch (error) {
-        console.error("خطأ أثناء الحذف:", error);
-      }
-    }
+    if (!window.confirm(t.deleteConfirm)) return;
+    try { if (recipe.menuItemId) await deleteDoc(doc(db, 'restaurants', restaurantId, 'menuItems', recipe.menuItemId)); await deleteDoc(doc(db, 'restaurants', restaurantId, 'recipes', recipe.id)); } catch (error) { console.error('خطأ أثناء الحذف:', error); }
   };
+  const getRecipeDisplayName = (recipe: Recipe) => lang === 'fr' && recipe.nameFr ? recipe.nameFr : lang === 'en' && recipe.nameEn ? recipe.nameEn : recipe.nameAr || recipe.nameFr || recipe.nameEn || 'طبق بدون اسم';
 
-  const getRecipeDisplayName = (recipe: Recipe) => {
-    if (lang === 'fr' && recipe.nameFr) return recipe.nameFr;
-    if (lang === 'en' && recipe.nameEn) return recipe.nameEn;
-    return recipe.nameAr || recipe.nameFr || recipe.nameEn || 'طبق بدون اسم';
-  };
-      return (
+  return (
     <div className="space-y-6" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">{t.title}</h1>
-          <p className="text-sm text-slate-500">{t.subtitle}</p>
-        </div>
-        <button
-          onClick={() => {
-            setEditingRecipeId(null);
-            setNewRecipe(initialFormState);
-            setShowAddModal(true);
-          }}
-          className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 transition shadow-md text-sm"
-        >
-          <Plus size={18} />
-          <span>{t.addNewButton}</span>
-        </button>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className={`w-full border-collapse ${lang === 'ar' ? 'text-right' : 'text-left'}`}>
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-sm">
-              <th className="p-4">{t.tableImage}</th>
-              <th className="p-4">{t.tableName}</th>
-              <th className="p-4">{t.tableCategory}</th>
-              <th className="p-4">{t.tableCost}</th>
-              <th className="p-4">{t.tablePrice}</th>
-              <th className="p-4">{t.tableProfit}</th>
-              <th className="p-4 text-center">{t.tableStatus}</th>
-              <th className="p-4 text-center">الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody className="text-slate-700 text-sm divide-y divide-slate-100">
-            {recipes.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="p-8 text-center text-slate-400 italic">{t.emptyState}</td>
-              </tr>
-            ) : (
-              recipes.map((recipe) => {
-                const profit = recipe.price - recipe.cost;
-                return (
-                  <tr key={recipe.id} className="hover:bg-slate-50/50 transition">
-                    <td className="p-4">
-                      {recipe.imageUrl ? (
-                        <img
-                          src={recipe.imageUrl} 
-                          alt={getRecipeDisplayName(recipe)}
-                          className={`w-10 h-10 object-cover rounded-xl border transition-all duration-300 ${recipe.isPublished ? 'opacity-70 blur-[0.3px]' : ''}`} 
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
-                          <ImageIcon size={18} />
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-4 font-bold text-slate-800 flex items-center gap-2 mt-2">
-                      <Utensils size={16} className="text-amber-500 shrink-0" />
-                      <span>{getRecipeDisplayName(recipe)}</span>
-                    </td>
-                    <td className="p-4">
-                      <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-xs font-semibold">
-                        {recipe.category}
-                      </span>
-                    </td>
-                    <td className="p-4 text-slate-600">{Number(recipe.cost || 0).toLocaleString()} {t.currency}</td>
-                    <td className="p-4 font-bold text-slate-800">{Number(recipe.price || 0).toLocaleString()} {t.currency}</td>
-                    <td className="p-4 font-bold text-green-600">+{profit.toLocaleString()} {t.currency}</td>
-                    
-                    <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        {recipe.isPublished ? (
-                          <>
-                            <span className="bg-slate-100 text-slate-400 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 cursor-not-allowed opacity-60 backdrop-blur-sm">
-                              <CheckCircle2 size={13} className="text-emerald-500" />
-                              <span>{t.publishedStatus}</span>
-                            </span>
-
-                            <button
-                              onClick={() => handleToggleHide(recipe)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm ${
-                                recipe.isHidden 
-                                  ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100' 
-                                  : 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100'
-                              }`}
-                            >
-                              {recipe.isHidden ? (
-                                <>
-                                  <Eye size={13} />
-                                  <span>{t.showInMenu}</span>
-                                </>
-                              ) : (
-                                <>
-                                  <EyeOff size={13} />
-                                  <span>{t.hideTemporarily}</span>
-                                </>
-                              )}
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => handlePublishToMenu(recipe)}
-                            disabled={publishingId === recipe.id}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
-                          >
-                            {publishingId === recipe.id ? (
-                              <span className="animate-pulse">{t.publishing}</span>
-                            ) : (
-                              <>
-                                <Send size={13} />
-                                <span>{t.publishToMenu}</span>
-                              </>
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                      <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button 
-                          onClick={() => handleEditClick(recipe)} 
-                          className="text-amber-500 hover:text-amber-600 transition p-1 hover:bg-amber-50 rounded-lg"
-                          title="تعديل الوصفة"
-                        >
-                          <Edit3 size={16} />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteRecipe(recipe)} 
-                          className="text-red-400 hover:text-red-600 transition p-1 hover:bg-red-50 rounded-lg"
-                          title="حذف الوصفة"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <form 
-            onSubmit={handleSaveRecipe} 
-            className="bg-white p-6 rounded-2xl max-w-lg w-full shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto relative flex flex-col"
-            dir={lang === 'ar' ? 'rtl' : 'ltr'}
-          >
-            <div className="flex justify-between items-center border-b pb-2 text-slate-800 sticky -top-6 bg-white z-20 pt-1">
-              <h3 className="font-bold text-lg">
-                {editingRecipeId ? 'تعديل الوصفة' : t.modalTitle}
-              </h3>
-              <button 
-                type="button" 
-                onClick={handleCloseModal}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
-              <label className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
-                <Globe size={13} className="text-indigo-500" />
-                <span>لغة إدخال اسم الوصفة ووصفها:</span>
-              </label>
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setInputLang('ar')}
-                  className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold transition ${
-                    inputLang === 'ar' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  العربية
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInputLang('fr')}
-                  className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold transition ${
-                    inputLang === 'fr' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  Français
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInputLang('en')}
-                  className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold transition ${
-                    inputLang === 'en' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  English
-                </button>
-              </div>
-            </div>
-            
-            {inputLang === 'ar' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalNameLabel} (بالعربية)</label>
-                <input
-                  type="text" 
-                  required 
-                  value={newRecipe.nameAr} 
-                  onChange={(e) => setNewRecipe({ ...newRecipe, nameAr: e.target.value })} 
-                  className="w-full p-2.5 border rounded-xl text-sm" 
-                  placeholder={t.modalNamePlaceholder} 
-                />
-              </div>
-            )}
-
-            {inputLang === 'fr' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">اسم الطبق (بالفرنسية)</label>
-                <input 
-                  type="text" 
-                  value={newRecipe.nameFr} 
-                  onChange={(e) => setNewRecipe({ ...newRecipe, nameFr: e.target.value })} 
-                  className="w-full p-2.5 border rounded-xl text-sm" 
-                  placeholder="Nom du plat..." 
-                />
-              </div>
-            )}
-
-            {inputLang === 'en' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">اسم الطبق (بالإنجليزية)</label>
-                <input 
-                  type="text" 
-                  value={newRecipe.nameEn} 
-                  onChange={(e) => setNewRecipe({ ...newRecipe, nameEn: e.target.value })} 
-                  className="w-full p-2.5 border rounded-xl text-sm" 
-                  placeholder="Dish Name..." 
-                />
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-500 flex items-center gap-1">
-                <ImageIcon size={14} className="text-amber-500" /> {t.modalImageLabel}
-              </label>
-              
-              <div className="flex items-center gap-2">
-                <label className="flex-1 border-2 border-dashed border-amber-300 bg-amber-50/50 hover:bg-amber-100/50 transition p-3 rounded-xl cursor-pointer flex flex-col items-center justify-center text-center">
-                  <Upload size={20} className="text-amber-600 mb-1" />
-                  <span className="text-xs font-bold text-slate-700">{t.uploadFromDevice}</span>
-                  <span className="text-[10px] text-slate-400">{t.uploadHint}</span>
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={handleImageChange} 
-                    className="hidden" 
-                  />
-                </label>
-              </div>
-
-              {newRecipe.imageUrl && (
-                <div className="relative w-full h-24 rounded-xl overflow-hidden border border-slate-200 mt-2">
-                  <img src={newRecipe.imageUrl} alt="معاينة" className="w-full h-full object-cover" />
-                  <button 
-                    type="button" 
-                    onClick={() => setNewRecipe({ ...newRecipe, imageUrl: '' })}
-                    className="absolute top-1 left-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalCostLabel}</label>
-                <input 
-                  type="number" 
-                  value={newRecipe.cost} 
-                  onChange={(e) => setNewRecipe({ ...newRecipe, cost: Number(e.target.value) })} 
-                  className="w-full p-2.5 border rounded-xl text-sm" 
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalPriceLabel}</label>
-                <input 
-                  type="number"
-                  required 
-                  value={newRecipe.price} 
-                  onChange={(e) => setNewRecipe({ ...newRecipe, price: Number(e.target.value) })} 
-                  className="w-full p-2.5 border rounded-xl text-sm" 
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2 border-t border-slate-100 pt-3">
-              <label className="block text-xs font-bold text-slate-700">
-                تصنيف الوجبة (Category)
-              </label>
-
-              {!isAddingNewCategory ? (
-                <div className="flex gap-2">
-                  <select
-                    value={newRecipe.category}
-                    onChange={(e) => {
-                      if (e.target.value === 'NEW') {
-                        setIsAddingNewCategory(true);
-                      } else {
-                        setNewRecipe({ ...newRecipe, category: e.target.value });
-                      }
-                    }}
-                    className="w-full p-2.5 border rounded-xl text-sm bg-white text-slate-700"
-                  >
-                    <option value="burgers">البرجر (Burgers)</option>
-                    <option value="main">أطباق رئيسية (Main Courses)</option>
-                    <option value="appetizers">مقبلات (Appetizers)</option>
-                    <option value="desserts">حلويات (Desserts)</option>
-                    <option value="drinks">مشروبات (Drinks)</option>
-                    
-                    {categoriesList.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat[lang] || cat.ar || cat.en || cat.id}
-                      </option>
-                    ))}
-
-                    <option value="NEW" className="font-bold text-amber-600">
-                      + إضافة تصنيف جديد...
-                    </option>
-                  </select>
-                </div>
-              ) : (
-                  <div className="p-3 rounded-2xl bg-amber-50/60 border border-amber-300 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-amber-700">إضافة تصنيف جديد باللغات الثلاث</span>
-                    <button 
-                      type="button" 
-                      onClick={() => setIsAddingNewCategory(false)}
-                      className="text-xs text-red-500 hover:underline"
-                    >
-                      إلغاء
-                    </button>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <input
-                      type="text"
-                      placeholder="العربية"
-                      value={newCatAr}
-                      onChange={(e) => setNewCatAr(e.target.value)}
-                      className="p-2 rounded-xl border text-xs bg-white text-slate-700"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Français"
-                      value={newCatFr}
-                      onChange={(e) => setNewCatFr(e.target.value)}
-                      className="p-2 rounded-xl border text-xs bg-white text-slate-700"
-                    />
-                    <input
-                      type="text"
-                      placeholder="English"
-                      value={newCatEn}
-                      onChange={(e) => setNewCatEn(e.target.value)}
-                      className="p-2 rounded-xl border text-xs bg-white text-slate-700"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-100 space-y-3">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                  <Package size={14} className="text-amber-600" />
-                  <span>المواد الخام المستهلكة في الوجبة</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={handleAddIngredientRow}
-                  className="text-xs font-bold text-amber-700 hover:text-amber-800 flex items-center gap-1 bg-amber-100/60 px-2 py-1 rounded-lg transition"
-                >
-                  <Plus size={12} />
-                  <span>إضافة مادة خام</span>
-                </button>
-              </div>
-
-              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                {newRecipe.recipeIngredients?.map((ing, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
-                    <select 
-                      value={ing.inventoryItemId} 
-                      onChange={(e) => handleIngredientChange(idx, 'inventoryItemId', e.target.value)}
-                      className="flex-1 p-2 border rounded-xl text-xs bg-white text-slate-700"
-                    >
-                      <option value="">اختر المادة الخام...</option>
-                      {inventoryItems.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.itemName || item.name} ({item.unit || 'وحدة'})
-                        </option>
-                      ))}
-                    </select>
-
-                    <input 
-                      type="number" 
-                      step="0.001" 
-                      value={ing.quantity} 
-                      onChange={(e) => handleIngredientChange(idx, 'quantity', Number(e.target.value))} 
-                      className="w-24 p-2 border rounded-xl text-xs bg-white text-center" 
-                      placeholder="الكمية"
-                    />
-                     {newRecipe.recipeIngredients && newRecipe.recipeIngredients.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveIngredientRow(idx)}
-                        className="text-red-400 hover:text-red-600 p-1 transition"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {inputLang === 'ar' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalIngredientsLabel} (بالعربية)</label>
-                <textarea 
-                  value={newRecipe.ingredients} 
-                  onChange={(e) => setNewRecipe({ ...newRecipe, ingredients: e.target.value })} 
-                  placeholder={t.modalIngredientsPlaceholder} 
-                  className="w-full p-2.5 border rounded-xl text-sm resize-none h-16" 
-                />
-              </div>
-            )}
-            
-            {inputLang === 'fr' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">وصف المكونات (بالفرنسية)</label>
-                <textarea 
-                  value={newRecipe.ingredientsFr} 
-                  onChange={(e) => setNewRecipe({ ...newRecipe, ingredientsFr: e.target.value })} 
-                  placeholder="Description des ingrédients..." 
-                  className="w-full p-2.5 border rounded-xl text-sm resize-none h-16" 
-                />
-              </div>
-            )}
-
-            {inputLang === 'en' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">وصف المكونات (بالإنجليزية)</label>
-                <textarea 
-                  value={newRecipe.ingredientsEn} 
-                  onChange={(e) => setNewRecipe({ ...newRecipe, ingredientsEn: e.target.value })} 
-                  placeholder="Ingredients description..." 
-                  className="w-full p-2.5 border rounded-xl text-sm resize-none h-16" 
-                />
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-3 sticky -bottom-6 bg-white pb-2 border-t mt-2 z-20">
-              <button 
-                type="submit" 
-                className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-xl transition text-sm"
-              >
-                {editingRecipeId ? 'تحديث الوصفة' : t.saveBtn}
-              </button>
-              <button 
-                type="button" 
-                onClick={handleCloseModal} 
-                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl transition text-sm"
-              >
-                {t.cancelBtn}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      <div className="flex justify-between items-center"><div><h1 className="text-2xl font-bold text-slate-800">{t.title}</h1><p className="text-sm text-slate-500">{t.subtitle}</p></div><button onClick={() => { setEditingRecipeId(null); setNewRecipe(initialFormState); setShowAddModal(true); }} className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 transition shadow-md text-sm"><Plus size={18}/><span>{t.addNewButton}</span></button></div>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"><table className={`w-full border-collapse ${lang === 'ar' ? 'text-right' : 'text-left'}`}><thead><tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-sm"><th className="p-4">{t.tableImage}</th><th className="p-4">{t.tableName}</th><th className="p-4">{t.tableCategory}</th><th className="p-4">{t.tableCost}</th><th className="p-4">{t.tablePrice}</th><th className="p-4">{t.tableProfit}</th><th className="p-4 text-center">{t.tableStatus}</th><th className="p-4 text-center">الإجراءات</th></tr></thead><tbody className="text-slate-700 text-sm divide-y divide-slate-100">{recipes.length === 0 ? <tr><td colSpan={8} className="p-8 text-center text-slate-400 italic">{t.emptyState}</td></tr> : recipes.map(recipe => { const profit = recipe.price - recipe.cost; return <tr key={recipe.id} className="hover:bg-slate-50/50 transition"><td className="p-4">{recipe.imageUrl ? <img src={recipe.imageUrl} alt={getRecipeDisplayName(recipe)} className={`w-10 h-10 object-cover rounded-xl border transition-all duration-300 ${recipe.isPublished ? 'opacity-70 blur-[0.3px]' : ''}`} /> : <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400"><ImageIcon size={18}/></div>}</td><td className="p-4 font-bold text-slate-800 flex items-center gap-2 mt-2"><Utensils size={16} className="text-amber-500 shrink-0"/><span>{getRecipeDisplayName(recipe)}</span></td><td className="p-4"><span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-xs font-semibold">{recipe.category}</span></td><td className="p-4 text-slate-600">{Number(recipe.cost || 0).toLocaleString()} {t.currency}</td><td className="p-4 font-bold text-slate-800">{Number(recipe.price || 0).toLocaleString()} {t.currency}</td><td className="p-4 font-bold text-green-600">+{profit.toLocaleString()} {t.currency}</td><td className="p-4 text-center"><div className="flex items-center justify-center gap-2">{recipe.isPublished ? <><span className="bg-slate-100 text-slate-400 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 cursor-not-allowed opacity-60"><CheckCircle2 size={13} className="text-emerald-500"/><span>{t.publishedStatus}</span></span><button onClick={() => handleToggleHide(recipe)} className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm ${recipe.isHidden ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100' : 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100'}`}>{recipe.isHidden ? <><Eye size={13}/><span>{t.showInMenu}</span></> : <><EyeOff size={13}/><span>{t.hideTemporarily}</span></>}</button></> : <button onClick={() => handlePublishToMenu(recipe)} disabled={publishingId === recipe.id} className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm">{publishingId === recipe.id ? <span className="animate-pulse">{t.publishing}</span> : <><Send size={13}/><span>{t.publishToMenu}</span></>}</button>}</div></td><td className="p-4 text-center"><div className="flex items-center justify-center gap-2"><button onClick={() => handleEditClick(recipe)} className="text-amber-500 hover:text-amber-600 transition p-1 hover:bg-amber-50 rounded-lg" title="تعديل الوصفة"><Edit3 size={16}/></button><button onClick={() => handleDeleteRecipe(recipe)} className="text-red-400 hover:text-red-600 transition p-1 hover:bg-red-50 rounded-lg" title="حذف الوصفة"><Trash2 size={16}/></button></div></td></tr>; })}</tbody></table></div>
+      {showAddModal && <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><form onSubmit={handleSaveRecipe} className="bg-white p-6 rounded-2xl max-w-lg w-full shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto relative flex flex-col" dir={lang === 'ar' ? 'rtl' : 'ltr'}><div className="flex justify-between items-center border-b pb-2 text-slate-800 sticky -top-6 bg-white z-20 pt-1"><h3 className="font-bold text-lg">{editingRecipeId ? 'تعديل الوصفة' : t.modalTitle}</h3><button type="button" onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600"><X size={18}/></button></div><div className="bg-slate-50 p-2 rounded-xl border border-slate-200"><label className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1"><Globe size={13} className="text-indigo-500"/><span>لغة إدخال اسم الوصفة ووصفها:</span></label><div className="flex gap-1.5"><button type="button" onClick={() => setInputLang('ar')} className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold transition ${inputLang === 'ar' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100'}`}>العربية</button><button type="button" onClick={() => setInputLang('fr')} className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold transition ${inputLang === 'fr' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100'}`}>Français</button><button type="button" onClick={() => setInputLang('en')} className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold transition ${inputLang === 'en' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100'}`}>English</button></div></div>{inputLang === 'ar' && <div><label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalNameLabel} (بالعربية)</label><input type="text" required value={newRecipe.nameAr} onChange={e => setNewRecipe({...newRecipe,nameAr:e.target.value})} className="w-full p-2.5 border rounded-xl text-sm" placeholder={t.modalNamePlaceholder}/></div>}{inputLang === 'fr' && <div><label className="block text-xs font-semibold text-slate-500 mb-1">اسم الطبق (بالفرنسية)</label><input type="text" value={newRecipe.nameFr} onChange={e => setNewRecipe({...newRecipe,nameFr:e.target.value})} className="w-full p-2.5 border rounded-xl text-sm" placeholder="Nom du plat..."/></div>}{inputLang === 'en' && <div><label className="block text-xs font-semibold text-slate-500 mb-1">اسم الطبق (بالإنجليزية)</label><input type="text" value={newRecipe.nameEn} onChange={e => setNewRecipe({...newRecipe,nameEn:e.target.value})} className="w-full p-2.5 border rounded-xl text-sm" placeholder="Dish Name..."/></div>}<div className="space-y-2"><label className="text-xs font-semibold text-slate-500 flex items-center gap-1"><ImageIcon size={14} className="text-amber-500"/> {t.modalImageLabel}</label><label className="flex-1 border-2 border-dashed border-amber-300 bg-amber-50/50 hover:bg-amber-100/50 transition p-3 rounded-xl cursor-pointer flex flex-col items-center justify-center text-center"><Upload size={20} className="text-amber-600 mb-1"/><span className="text-xs font-bold text-slate-700">{t.uploadFromDevice}</span><span className="text-[10px] text-slate-400">{t.uploadHint}</span><input type="file" accept="image/*" onChange={handleImageChange} className="hidden"/></label>{newRecipe.imageUrl && <div className="relative w-full h-24 rounded-xl overflow-hidden border border-slate-200 mt-2"><img src={newRecipe.imageUrl} alt="معاينة" className="w-full h-full object-cover"/><button type="button" onClick={() => setNewRecipe({...newRecipe,imageUrl:''})} className="absolute top-1 left-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition"><X size={12}/></button></div>}</div><div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalCostLabel}</label><input type="number" value={newRecipe.cost} onChange={e => setNewRecipe({...newRecipe,cost:Number(e.target.value)})} className="w-full p-2.5 border rounded-xl text-sm"/></div><div><label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalPriceLabel}</label><input type="number" required value={newRecipe.price} onChange={e => setNewRecipe({...newRecipe,price:Number(e.target.value)})} className="w-full p-2.5 border rounded-xl text-sm"/></div></div><div className="space-y-2 border-t border-slate-100 pt-3"><label className="block text-xs font-bold text-slate-700">تصنيف الوجبة (Category)</label>{!isAddingNewCategory ? <div className="flex gap-2"><select value={newRecipe.category} onChange={e => e.target.value === 'NEW' ? setIsAddingNewCategory(true) : setNewRecipe({...newRecipe,category:e.target.value})} className="w-full p-2.5 border rounded-xl text-sm bg-white text-slate-700"><option value="burgers">البرجر (Burgers)</option><option value="main">أطباق رئيسية (Main Courses)</option><option value="appetizers">مقبلات (Appetizers)</option><option value="desserts">حلويات (Desserts)</option><option value="drinks">مشروبات (Drinks)</option>{categoriesList.map(cat => <option key={cat.id} value={cat.id}>{cat[lang] || cat.ar || cat.en || cat.id}</option>)}<option value="NEW">+ إضافة تصنيف جديد...</option></select></div> : <div className="p-3 rounded-2xl bg-amber-50/60 border border-amber-300 space-y-3"><div className="flex justify-between items-center"><span className="text-xs font-bold text-amber-700">إضافة تصنيف جديد باللغات الثلاث</span><button type="button" onClick={() => setIsAddingNewCategory(false)} className="text-xs text-red-500 hover:underline">إلغاء</button></div><div className="grid grid-cols-1 sm:grid-cols-3 gap-2"><input type="text" placeholder="العربية" value={newCatAr} onChange={e => setNewCatAr(e.target.value)} className="p-2 rounded-xl border text-xs bg-white text-slate-700"/><input type="text" placeholder="Français" value={newCatFr} onChange={e => setNewCatFr(e.target.value)} className="p-2 rounded-xl border text-xs bg-white text-slate-700"/><input type="text" placeholder="English" value={newCatEn} onChange={e => setNewCatEn(e.target.value)} className="p-2 rounded-xl border text-xs bg-white text-slate-700"/></div></div>}</div><div className="p-3 bg-amber-50/50 rounded-xl border border-amber-100 space-y-3"><div className="flex justify-between items-center"><label className="text-xs font-bold text-slate-700 flex items-center gap-1"><Package size={14} className="text-amber-600"/><span>المواد الخام المستهلكة في الوجبة</span></label><button type="button" onClick={handleAddIngredientRow} className="text-xs font-bold text-amber-700 hover:text-amber-800 flex items-center gap-1 bg-amber-100/60 px-2 py-1 rounded-lg transition"><Plus size={12}/><span>إضافة مادة خام</span></button></div><div className="space-y-2 max-h-40 overflow-y-auto pr-1">{newRecipe.recipeIngredients?.map((ing,idx) => <div key={idx} className="flex gap-2 items-center"><select value={ing.inventoryItemId} onChange={e => handleIngredientChange(idx,'inventoryItemId',e.target.value)} className="flex-1 p-2 border rounded-xl text-xs bg-white text-slate-700"><option value="">اختر المادة الخام...</option>{inventoryItems.map(item => <option key={item.id} value={item.id}>{item.itemName || item.name} ({item.unit || 'وحدة'})</option>)}</select><input type="number" step="0.001" value={ing.quantity} onChange={e => handleIngredientChange(idx,'quantity',Number(e.target.value))} className="w-24 p-2 border rounded-xl text-xs bg-white text-center" placeholder="الكمية"/>{newRecipe.recipeIngredients && newRecipe.recipeIngredients.length > 1 && <button type="button" onClick={() => handleRemoveIngredientRow(idx)} className="text-red-400 hover:text-red-600 p-1 transition"><Trash2 size={15}/></button>}</div>)}</div></div>{inputLang === 'ar' && <div><label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalIngredientsLabel} (بالعربية)</label><textarea value={newRecipe.ingredients} onChange={e => setNewRecipe({...newRecipe,ingredients:e.target.value})} placeholder={t.modalIngredientsPlaceholder} className="w-full p-2.5 border rounded-xl text-sm resize-none h-16"/></div>}{inputLang === 'fr' && <div><label className="block text-xs font-semibold text-slate-500 mb-1">وصف المكونات (بالفرنسية)</label><textarea value={newRecipe.ingredientsFr} onChange={e => setNewRecipe({...newRecipe,ingredientsFr:e.target.value})} placeholder="Description des ingrédients..." className="w-full p-2.5 border rounded-xl text-sm resize-none h-16"/></div>}{inputLang === 'en' && <div><label className="block text-xs font-semibold text-slate-500 mb-1">وصف المكونات (بالإنجليزية)</label><textarea value={newRecipe.ingredientsEn} onChange={e => setNewRecipe({...newRecipe,ingredientsEn:e.target.value})} placeholder="Ingredients description..." className="w-full p-2.5 border rounded-xl text-sm resize-none h-16"/></div>}<div className="flex gap-3 pt-3 sticky -bottom-6 bg-white pb-2 border-t mt-2 z-20"><button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-xl transition text-sm">{editingRecipeId ? 'تحديث الوصفة' : t.saveBtn}</button><button type="button" onClick={handleCloseModal} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl transition text-sm">{t.cancelBtn}</button></div></form></div>}
     </div>
   );
 };
