@@ -5,9 +5,10 @@ import test from 'node:test';
 const frontendService = await readFile('src/services/aiServices.tsx', 'utf8');
 const aiComponent = await readFile('src/components/customer/AiChat.tsx', 'utf8');
 const functionsIndex = await readFile('functions/index.js', 'utf8');
+const aiProvider = await readFile('functions/aiProvider.js', 'utf8');
 const functionsPackage = await readFile('functions/package.json', 'utf8');
 
- test('frontend AI service delegates to the trusted callable', () => {
+test('frontend AI service delegates to the trusted callable', () => {
   assert.match(frontendService, /httpsCallable/);
   assert.match(frontendService, /['"]aiAssistant['"]/);
   assert.doesNotMatch(frontendService, /VITE_API_KEY|VITE_GEMINI|import\.meta\.env/);
@@ -27,9 +28,10 @@ test('Gemini credential is declared as a server-side secret', () => {
 });
 
 test('server-side AI call does not expose the credential to client code', () => {
-  assert.match(functionsIndex, /generativelanguage\.googleapis\.com/);
-  assert.match(functionsIndex, /encodeURIComponent\(apiKey\)/);
-  assert.doesNotMatch(functionsIndex, /import\.meta\.env\.VITE_/);
+  assert.match(aiProvider, /generativelanguage\.googleapis\.com/);
+  assert.match(aiProvider, /encodeURIComponent\(apiKey\)/);
+  assert.doesNotMatch(frontendService, /import\.meta\.env\.VITE_/);
+  assert.doesNotMatch(aiComponent, /import\.meta\.env\.VITE_/);
 });
 
 test('AI function runtime remains on supported Node 20', () => {
