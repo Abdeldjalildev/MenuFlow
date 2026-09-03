@@ -30,6 +30,9 @@ Gate 1 does not attempt to prove Firestore transactions, security rules, authent
 - Existing Phase 2–4 regression suites remain green.
 - No production behavior is changed merely to satisfy unit tests.
 
+### Implementation state
+**IMPLEMENTED — verification deferred to final Phase 5 CI.**
+
 ## Gate 2 — Critical Order Workflow Integration
 
 ### Objective
@@ -40,13 +43,22 @@ Prove the server-authoritative order lifecycle and integrity guarantees through 
 - Valid and illegal lifecycle transitions.
 - Role-specific transition boundaries.
 - Inventory deduction on preparation.
-- Idempotent inventory deduction.
+- Idempotent inventory deduction, including concurrent preparation attempts.
 - Missing recipe/ingredient and insufficient-stock failures.
 - Concurrent driver claim behavior.
 - Concurrent daily order-number allocation.
 
+### Implementation
+- `tests/phase5-gate2-order-workflow.test.mjs` exercises the Auth, Firestore, and Functions emulators through the real callable endpoints.
+- `tests/phase5-gate2-driver-claim.test.mjs` exercises concurrent driver claims against the actual Firestore security rules.
+- Firebase Auth, Firestore, and Functions emulator ports are explicitly configured in `firebase.json`.
+- Dedicated scripts are registered in `package.json`.
+
 ### Exit condition
 The highest-risk Phase 3 guarantees are demonstrated through executable integration behavior, not only static source checks.
+
+### Implementation state
+**IMPLEMENTED — verification deferred to final Phase 5 CI.**
 
 ## Gate 3 — Customer Critical Path + Firestore Integration
 
@@ -54,7 +66,7 @@ The highest-risk Phase 3 guarantees are demonstrated through executable integrat
 Prove the public customer flow from anonymous identity through ordering and post-order actions while preserving tenant and ownership boundaries.
 
 ### Coverage
-- Anonymous authentication.
+- Anonymous customer identity contract.
 - Menu read path.
 - Order creation and own-order visibility.
 - Order tracking.
@@ -63,8 +75,16 @@ Prove the public customer flow from anonymous identity through ordering and post
 - Malformed and oversized customer writes.
 - Regression validation for `OrderProvider.appendToOrder`, whose direct mutation of `items` and `totalAmount` must be reconciled with the current `validOrderMutation` rules before being considered healthy.
 
+### Implementation
+- `tests/phase5-gate3-customer-firestore.test.mjs` exercises the Firestore security contract with the Firebase Emulator.
+- The append-order mismatch is captured as an expected failure/finding rather than fixed by weakening authorization rules.
+- Dedicated Gate 3 test command is registered in `package.json`.
+
 ### Exit condition
 The customer-critical path is tested against the Emulator and any permission mismatch is treated as a real defect rather than solved by broadening rules.
+
+### Implementation state
+**IMPLEMENTED — verification deferred to final Phase 5 CI.**
 
 ## Gate 4 — Authentication / RBAC / Tenant / AI Integration
 
@@ -83,6 +103,9 @@ Connect the authentication and authorization model to executable integration tes
 ### Exit condition
 Security-sensitive authorization behavior is demonstrated through executable integration tests rather than static assumptions alone.
 
+### Implementation state
+**DEFERRED — not modified in the current batch.**
+
 ## Gate 5 — CI Expansion + Full Regression
 
 ### Objective
@@ -98,6 +121,9 @@ Make CI execute the proven test suites with the smallest reliable change to the 
 ### Exit condition
 CI reliably reproduces the local verification contract and adds clear regression value without unnecessary runtime or complexity.
 
+### Implementation state
+**DEFERRED — not modified in the current batch.**
+
 ## Phase 5 exclusions
 
 - No React rewrite.
@@ -108,6 +134,16 @@ CI reliably reproduces the local verification contract and adds clear regression
 - No encoding migration; that remains Phase 7.
 - No production deployment claim based solely on emulator or static tests.
 
-## Known starting risk carried into later gates
+## Findings preserved without speculative fixes
 
-`OrderProvider.appendToOrder()` currently performs a transactional direct update of `items` and `totalAmount`, while the current Firestore order-mutation rules restrict allowed changed fields to the lifecycle/claim/payment fields. This is a high-confidence integration risk and is deliberately deferred to Gate 3 for executable validation rather than changing rules speculatively in Gate 1.
+### `OrderProvider.appendToOrder()` authorization mismatch
+
+The current client path performs a transactional direct update of `items` and `totalAmount`, while the current Firestore order-mutation rules permit only lifecycle/claim/payment fields. Gate 3 deliberately proves this mismatch with an emulator test. The fix requires an explicit product/security decision about who may append items and how those items/prices are authorized.
+
+### Client-supplied `totalAmount` integrity gap
+
+`createOrder` calculates an expected total but currently accepts a supplied `totalAmount` without requiring equality with that calculated value. This is documented as a separate integrity hardening opportunity. It is not changed during Gates 1–3 because doing so would expand the approved scope without a dedicated decision.
+
+## Verification policy for the current batch
+
+CI is intentionally **not** evaluated after each gate. Gates 1–3 are considered implementation-complete but not VERIFIED until the full Phase 5 batch reaches its final regression/CI stage.
