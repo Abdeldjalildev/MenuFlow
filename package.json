@@ -22,6 +22,7 @@
     "test:phase5:gate3": "firebase emulators:exec --project demo-menuflow-phase5-gate3 --only firestore \"node --test --test-concurrency=1 tests/phase5-gate3-customer-firestore.test.mjs\"",
     "test:phase5:gate4": "firebase emulators:exec --project demo-menuflow-phase5-gate4 --only auth,functions \"node --test --test-concurrency=1 tests/phase5-gate4-auth-ai-integration.test.mjs\"",
     "test:phase5:gate5": "node --test tests/phase5-gate5-ci-contract.test.mjs",
+    "perf:bundle-report": "node scripts/phase6-bundle-report.mjs",
     "test:phase2:production": "node scripts/phase2-production-verification.mjs",
     "preview": "vite preview"
   },
