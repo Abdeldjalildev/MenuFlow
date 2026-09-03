@@ -51,7 +51,7 @@ Instructions:
 
 Customer query: ${userQuery}`;
 
-      const response = await getAIResponse(contextAwarePrompt, menuItems);
+      const response = await getAIResponse(contextAwarePrompt, menuItems, currentRestaurantId);
       setAiResponse(response);
     } catch {
       setAiResponse(t('aiErrorMessage'));

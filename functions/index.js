@@ -1,10 +1,13 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore } = require('firebase-admin/firestore');
 const { initializeApp } = require('firebase-admin/app');
 const { getOrderNumberDate, getNextOrderNumber } = require('./orderNumber');
+const { generateGeminiResponse } = require('./aiProvider');
 
 initializeApp();
+const geminiApiKey = defineSecret('GEMINI_API_KEY');
 const ALLOWED_ROLES = new Set(['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery']);
 const TENANT_STAFF_ROLES = new Set(['Cashier', 'Kitchen', 'Delivery']);
 const TRANSITIONS = { pending: new Set(['preparing']), preparing: new Set(['driver_claimed', 'ready_for_payment', 'ready']), driver_claimed: new Set(['ready_for_delivery']), ready: new Set(['ready_for_payment']), ready_for_payment: new Set(['ready_for_delivery', 'paid']), ready_for_delivery: new Set(['on_the_way']), on_the_way: new Set(['delivered_unpaid']), delivered_unpaid: new Set(['paid']), paid: new Set(['completed']), completed: new Set() };
@@ -50,4 +53,49 @@ exports.transitionOrder = onCall(async (request) => {
     tx.update(orderRef, updates);
   });
   return { ok: true, orderId, status: newStatus };
+});
+
+function assertAIAuthorization(request, restaurantId) {
+  const auth = request.auth;
+  if (!auth) throw new HttpsError('unauthenticated', 'Authentication is required.');
+  if (!isNonEmptyString(restaurantId)) throw new HttpsError('invalid-argument', 'restaurantId is required.');
+
+  const signInProvider = auth.token?.firebase?.sign_in_provider;
+  const role = auth.token?.role;
+  if (signInProvider === 'anonymous') return;
+
+  if (!ALLOWED_ROLES.has(role)) throw new HttpsError('permission-denied', 'A valid authorization role is required.');
+  if (role !== 'SuperAdmin' && auth.token?.restaurantId !== restaurantId) {
+    throw new HttpsError('permission-denied', 'Cross-tenant AI access is forbidden.');
+  }
+}
+
+exports.aiAssistant = onCall({ secrets: [geminiApiKey] }, async (request) => {
+  const userPrompt = request.data?.userPrompt;
+  const menuItems = request.data?.menuItems;
+  const restaurantId = request.data?.restaurantId;
+  assertAIAuthorization(request, restaurantId);
+
+  if (!isNonEmptyString(userPrompt) || !Array.isArray(menuItems)) {
+    throw new HttpsError('invalid-argument', 'userPrompt and menuItems are required.');
+  }
+
+  const apiKey = geminiApiKey.value();
+  if (!isNonEmptyString(apiKey)) {
+    throw new HttpsError('failed-precondition', 'AI service is not configured.');
+  }
+
+  try {
+    const text = await generateGeminiResponse(apiKey, userPrompt, menuItems, `${restaurantId}:${request.auth.uid}`);
+    return { text };
+  } catch (error) {
+    if (error?.code === 'AI_RATE_LIMITED') {
+      throw new HttpsError('resource-exhausted', 'AI request rate limit exceeded.');
+    }
+    if (typeof error?.message === 'string' && error.message.startsWith('AI ')) {
+      throw new HttpsError('invalid-argument', error.message);
+    }
+    console.error('فشل الاتصال بخدمة الذكاء الاصطناعي:', error);
+    throw new HttpsError('internal', 'Unable to reach the AI service.');
+  }
 });
