@@ -3,8 +3,8 @@ import test, { after, before } from 'node:test';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, connectAuthEmulator } from 'firebase/auth';
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
-import { getAuth as getAdminAuth } from 'firebase-admin/auth';
-import { initializeApp as initializeAdminApp, getApps as getAdminApps } from 'firebase-admin/app';
+import { getAuth as getAdminAuth } from '../functions/node_modules/firebase-admin/auth/index.js';
+import { initializeApp as initializeAdminApp, getApps as getAdminApps } from '../functions/node_modules/firebase-admin/app/index.js';
 
 const PROJECT_ID = 'demo-menuflow-phase5-gate4';
 const REGION = 'us-central1';
