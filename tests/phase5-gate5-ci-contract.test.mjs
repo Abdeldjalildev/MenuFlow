@@ -22,6 +22,7 @@ test('Gate 5: npm test is the complete Phase 5 regression entry point', () => {
 test('Gate 5: CI preserves the repository reliability contract', () => {
   assert.match(ci, /fetch-depth:\s*0/);
   assert.match(ci, /run:\s*npm ci/);
+  assert.match(ci, /run:\s*npm ci --prefix functions/);
   assert.match(ci, /run:\s*npm run lint/);
   assert.match(ci, /run:\s*npm test/);
   assert.match(ci, /run:\s*npm run build/);
