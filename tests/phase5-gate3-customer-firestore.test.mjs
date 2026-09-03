@@ -98,12 +98,21 @@ test('Gate 3: anonymous customer can create a pending order only for their own F
       validOrder(RESTAURANT_A, CUSTOMER_B),
     ),
   );
-  await assertFails(
+});
+
+test('Gate 3: anonymous customer tenant selection is path-scoped, while staff access remains tenant-bound', async () => {
+  const db = anonymousCustomer();
+  await assertSucceeds(
     setDoc(
-      tenantDoc(db, RESTAURANT_B, 'orders', 'cross-tenant'),
+      tenantDoc(db, RESTAURANT_B, 'orders', 'cross-tenant-context'),
       validOrder(RESTAURANT_B, CUSTOMER_A),
     ),
   );
+  await assertSucceeds(getDoc(tenantDoc(db, RESTAURANT_B, 'orders', 'cross-tenant-context')));
+
+  await seed(`restaurants/${RESTAURANT_B}/orders/staff-order`, validOrder(RESTAURANT_B, CUSTOMER_B));
+  const staff = tenantUser('admin-a', RESTAURANT_A, 'Admin');
+  await assertFails(getDoc(tenantDoc(staff, RESTAURANT_B, 'orders', 'staff-order')));
 });
 
 test('Gate 3: customer order tracking remains readable after staff lifecycle changes', async () => {
