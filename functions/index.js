@@ -1,10 +1,12 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore } = require('firebase-admin/firestore');
 const { initializeApp } = require('firebase-admin/app');
 const { getOrderNumberDate, getNextOrderNumber } = require('./orderNumber');
 
 initializeApp();
+const geminiApiKey = defineSecret('GEMINI_API_KEY');
 const ALLOWED_ROLES = new Set(['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery']);
 const TENANT_STAFF_ROLES = new Set(['Cashier', 'Kitchen', 'Delivery']);
 const TRANSITIONS = { pending: new Set(['preparing']), preparing: new Set(['driver_claimed', 'ready_for_payment', 'ready']), driver_claimed: new Set(['ready_for_delivery']), ready: new Set(['ready_for_payment']), ready_for_payment: new Set(['ready_for_delivery', 'paid']), ready_for_delivery: new Set(['on_the_way']), on_the_way: new Set(['delivered_unpaid']), delivered_unpaid: new Set(['paid']), paid: new Set(['completed']), completed: new Set() };
@@ -50,4 +52,50 @@ exports.transitionOrder = onCall(async (request) => {
     tx.update(orderRef, updates);
   });
   return { ok: true, orderId, status: newStatus };
+});
+
+exports.aiAssistant = onCall({ secrets: [geminiApiKey] }, async (request) => {
+  const userPrompt = request.data?.userPrompt;
+  const menuItems = request.data?.menuItems;
+  if (!isNonEmptyString(userPrompt) || !Array.isArray(menuItems)) {
+    throw new HttpsError('invalid-argument', 'userPrompt and menuItems are required.');
+  }
+
+  const apiKey = geminiApiKey.value();
+  if (!isNonEmptyString(apiKey)) {
+    throw new HttpsError('failed-precondition', 'AI service is not configured.');
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: `أنت مساعد مطعم خبير. هذه هي قائمة الطعام: ${JSON.stringify(menuItems)}. الزبون يقول: "${userPrompt}". أجب باختصار.`
+          }]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('خطأ من خدمة الذكاء الاصطناعي:', response.status, data?.error?.message || 'Unknown API error');
+      throw new HttpsError('internal', 'AI provider request failed.');
+    }
+
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      throw new HttpsError('internal', 'AI provider returned an empty response.');
+    }
+
+    return { text };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    console.error('فشل الاتصال بخدمة الذكاء الاصطناعي:', error);
+    throw new HttpsError('internal', 'Unable to reach the AI service.');
+  }
 });
