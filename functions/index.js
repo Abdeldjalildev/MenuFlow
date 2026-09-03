@@ -4,6 +4,7 @@ const { getAuth } = require('firebase-admin/auth');
 const { getFirestore } = require('firebase-admin/firestore');
 const { initializeApp } = require('firebase-admin/app');
 const { getOrderNumberDate, getNextOrderNumber } = require('./orderNumber');
+const { generateGeminiResponse } = require('./aiProvider');
 
 initializeApp();
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
@@ -54,9 +55,27 @@ exports.transitionOrder = onCall(async (request) => {
   return { ok: true, orderId, status: newStatus };
 });
 
+function assertAIAuthorization(request, restaurantId) {
+  const auth = request.auth;
+  if (!auth) throw new HttpsError('unauthenticated', 'Authentication is required.');
+  if (!isNonEmptyString(restaurantId)) throw new HttpsError('invalid-argument', 'restaurantId is required.');
+
+  const signInProvider = auth.token?.firebase?.sign_in_provider;
+  const role = auth.token?.role;
+  if (signInProvider === 'anonymous') return;
+
+  if (!ALLOWED_ROLES.has(role)) throw new HttpsError('permission-denied', 'A valid authorization role is required.');
+  if (role !== 'SuperAdmin' && auth.token?.restaurantId !== restaurantId) {
+    throw new HttpsError('permission-denied', 'Cross-tenant AI access is forbidden.');
+  }
+}
+
 exports.aiAssistant = onCall({ secrets: [geminiApiKey] }, async (request) => {
   const userPrompt = request.data?.userPrompt;
   const menuItems = request.data?.menuItems;
+  const restaurantId = request.data?.restaurantId;
+  assertAIAuthorization(request, restaurantId);
+
   if (!isNonEmptyString(userPrompt) || !Array.isArray(menuItems)) {
     throw new HttpsError('invalid-argument', 'userPrompt and menuItems are required.');
   }
@@ -66,35 +85,12 @@ exports.aiAssistant = onCall({ secrets: [geminiApiKey] }, async (request) => {
     throw new HttpsError('failed-precondition', 'AI service is not configured.');
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const prompt = `أنت مساعد مطعم خبير. هذه هي قائمة الطعام: ${JSON.stringify(menuItems)}. الزبون يقول: "${userPrompt}". أجب باختصار.`;
 
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `أنت مساعد مطعم خبير. هذه هي قائمة الطعام: ${JSON.stringify(menuItems)}. الزبون يقول: "${userPrompt}". أجب باختصار.`
-          }]
-        }]
-      })
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      console.error('خطأ من خدمة الذكاء الاصطناعي:', response.status, data?.error?.message || 'Unknown API error');
-      throw new HttpsError('internal', 'AI provider request failed.');
-    }
-
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      throw new HttpsError('internal', 'AI provider returned an empty response.');
-    }
-
+    const text = await generateGeminiResponse(apiKey, prompt);
     return { text };
   } catch (error) {
-    if (error instanceof HttpsError) throw error;
     console.error('فشل الاتصال بخدمة الذكاء الاصطناعي:', error);
     throw new HttpsError('internal', 'Unable to reach the AI service.');
   }
