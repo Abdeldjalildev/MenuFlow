@@ -18,6 +18,7 @@
     "test:phase4:gate5": "node --test tests/phase4-gate5-ai-security-regression.test.mjs",
     "test:phase5:gate1": "node --test tests/phase5-gate1-domain.test.mjs",
     "test:phase5:gate2": "firebase emulators:exec --project demo-menuflow-phase5-gate2 --only auth,firestore,functions \"node --test --test-concurrency=1 tests/phase5-gate2-order-workflow.test.mjs\"",
+    "test:phase5:gate2:driver": "firebase emulators:exec --project demo-menuflow-phase5-gate2-driver --only firestore \"node --test --test-concurrency=1 tests/phase5-gate2-driver-claim.test.mjs\"",
     "test:phase5:gate3": "firebase emulators:exec --project demo-menuflow-phase5-gate3 --only firestore \"node --test --test-concurrency=1 tests/phase5-gate3-customer-firestore.test.mjs\"",
     "test:phase2:production": "node scripts/phase2-production-verification.mjs",
     "preview": "vite preview"
@@ -32,7 +33,6 @@
     "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.23.0",
-    "qrcode.react": "^4.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1",
@@ -53,8 +53,7 @@
     "globals": "^17.7.0",
     "tailwindcss": "^4.3.2",
     "typescript": "~6.0.2",
-    "typescript-eslint": "^8.62.0",
-    "vite": "^8.1.1"
+    "typescript-eslint": "^8.62.0"
   },
   "packageManager": "npm@10.9.8"
 }
