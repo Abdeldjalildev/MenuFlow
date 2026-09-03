@@ -39,7 +39,7 @@ jobs:
         run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.sha }}"
       - name: Lint
         run: npm run lint
-      - name: Firestore security regression tests
+      - name: Full automated regression suite
         run: npm test
       - name: TypeScript & production build
         run: npm run build
