@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
+import { createRequire } from 'node:module';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, connectAuthEmulator } from 'firebase/auth';
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
-import { getAuth as getAdminAuth } from '../functions/node_modules/firebase-admin/auth/index.js';
-import { initializeApp as initializeAdminApp, getApps as getAdminApps } from '../functions/node_modules/firebase-admin/app/index.js';
+
+const requireFromFunctions = createRequire(new URL('../functions/package.json', import.meta.url));
+const { getAuth: getAdminAuth } = requireFromFunctions('firebase-admin/auth');
+const { initializeApp: initializeAdminApp, getApps: getAdminApps } = requireFromFunctions('firebase-admin/app');
 
 const PROJECT_ID = 'demo-menuflow-phase5-gate4';
 const REGION = 'us-central1';
