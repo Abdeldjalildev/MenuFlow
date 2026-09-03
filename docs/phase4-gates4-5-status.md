@@ -37,8 +37,10 @@ Both are included in `npm test`.
 
 ## Verification state
 
-**IMPLEMENTED — awaiting CI verification.**
+**VERIFIED — code + local/CI regression evidence.**
 
-This document intentionally does not claim deployed production verification. The final Phase 4 status must be based on the complete CI result after the coding batch is finished.
+Phase 4 Gates 4–5 are verified at the repository/CI level. Production deployment/verification is **BLOCKED**, not passed: the attempted `aiAssistant` deployment to `menuflow-c02e5` could not enable `artifactregistry.googleapis.com` because the project's billing account is not open.
+
+No production success claim is made. This operational blocker does not invalidate the repository-level security implementation or prevent Phase 5 from proceeding under the project's incremental workflow.
 
 No destructive migration, unrelated dependency upgrade, broad rewrite, or unrelated application behavior change was introduced.
