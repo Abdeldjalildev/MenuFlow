@@ -6,14 +6,21 @@ interface AIResponse {
   text: string;
 }
 
-const aiAssistant = httpsCallable<
-  { userPrompt: string; menuItems: MenuItem[] },
-  AIResponse
->(getFunctions(app), 'aiAssistant');
+interface AIRequest {
+  userPrompt: string;
+  menuItems: MenuItem[];
+  restaurantId: string;
+}
 
-export const getAIResponse = async (userPrompt: string, menuItems: MenuItem[]): Promise<string> => {
+const aiAssistant = httpsCallable<AIRequest, AIResponse>(getFunctions(app), 'aiAssistant');
+
+export const getAIResponse = async (
+  userPrompt: string,
+  menuItems: MenuItem[],
+  restaurantId: string,
+): Promise<string> => {
   try {
-    const result = await aiAssistant({ userPrompt, menuItems });
+    const result = await aiAssistant({ userPrompt, menuItems, restaurantId });
     const text = result.data?.text;
 
     if (!text) {
