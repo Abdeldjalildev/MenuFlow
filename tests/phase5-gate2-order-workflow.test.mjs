@@ -72,8 +72,7 @@ after(async () => {
 
 test('Gate 2: createOrder creates a tenant-scoped pending order with server-assigned daily number', async () => {
   const customer = await createClient('customer-create');
-  const createOrder = callable(customer.functions, 'createOrder');
-  const result = await createOrder({ restaurantId: RESTAURANT_A, tableNumber: '7', items: [{ menuItemId: 'meal-a', recipeId: 'recipe-a', price: 1200, quantity: 2 }], totalAmount: 2400 });
+  const result = await callable(customer.functions, 'createOrder')({ restaurantId: RESTAURANT_A, tableNumber: '7', items: [{ menuItemId: 'meal-a', recipeId: 'recipe-a', price: 1200, quantity: 2 }], totalAmount: 2400 });
   assert.equal(result.data.ok, true);
   const order = (await getDoc(orderRef(result.data.orderId))).data();
   assert.equal(order.restaurantId, RESTAURANT_A);
@@ -104,6 +103,25 @@ test('Gate 2: preparation atomically deducts inventory and marks the order once'
   assert.equal(order.inventoryDeducted, true);
   assert.equal(inventory.currentQuantity, 4);
   assert.equal(inventory.quantity, 4);
+});
+
+test('Gate 2: concurrent preparation attempts deduct inventory only once', async () => {
+  await seed(`restaurants/${RESTAURANT_A}/recipes/recipe-a`, { recipeIngredients: [{ inventoryItemId: 'flour', quantity: 2 }] });
+  await seed(`restaurants/${RESTAURANT_A}/inventory/flour`, { currentQuantity: 10, quantity: 10 });
+  await seed(`restaurants/${RESTAURANT_A}/orders/order-a`, { restaurantId: RESTAURANT_A, customerId: 'customer-a', items: [{ recipeId: 'recipe-a', quantity: 3 }], tableNumber: '1', status: 'pending', totalAmount: 1200, inventoryDeducted: false });
+  const kitchen = await createStaffClient('kitchen-concurrent', 'Kitchen');
+  const transition = callable(kitchen.functions, 'transitionOrder');
+  const results = await Promise.allSettled([
+    transition({ orderId: 'order-a', newStatus: 'preparing', restaurantId: RESTAURANT_A }),
+    transition({ orderId: 'order-a', newStatus: 'preparing', restaurantId: RESTAURANT_A }),
+  ]);
+  assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+  assert.equal(results.filter((result) => result.status === 'rejected').length, 1);
+  const order = (await getDoc(orderRef('order-a'))).data();
+  const inventory = (await getDoc(doc(adminDb, `restaurants/${RESTAURANT_A}/inventory/flour`))).data();
+  assert.equal(order.status, 'preparing');
+  assert.equal(order.inventoryDeducted, true);
+  assert.equal(inventory.currentQuantity, 4);
 });
 
 test('Gate 2: insufficient stock fails closed without changing order or inventory', async () => {
