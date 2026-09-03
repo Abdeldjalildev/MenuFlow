@@ -26,10 +26,6 @@ Gates 2 and 3 strengthen the AI service boundary without changing the customer-f
 
 `tests/phase4-gates2-3-ai-boundary.test.mjs` verifies the server-side provider boundary, callable contract, authentication/tenant checks, authorization ordering, and absence of privileged authorization logic in browser code.
 
-## Explicit boundary
-
-Input size limits, payload schema hardening, prompt abuse controls, rate limiting, and broader AI behavior controls remain deferred to **Gate 4**. Production deployment verification remains a separate operational concern and is not claimed by these repository tests.
-
 ## Verification state
 
 **IMPLEMENTED — awaiting CI verification.**
