@@ -34,12 +34,14 @@ jobs:
           java-version: '21'
       - name: Install dependencies
         run: npm ci
+      - name: Install Functions dependencies for emulator integration tests
+        run: npm ci --prefix functions
       - name: Check diff formatting
         if: github.event_name == 'pull_request'
         run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.sha }}"
       - name: Lint
         run: npm run lint
-      - name: Firestore security regression tests
+      - name: Full automated regression suite
         run: npm test
       - name: TypeScript & production build
         run: npm run build
