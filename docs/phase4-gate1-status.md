@@ -45,6 +45,6 @@ Full CI verification is required before this gate is marked **VERIFIED**.
 
 ## Explicit boundary
 
-Authentication/authorization, rate limiting, abuse controls, and stronger input validation are intentionally handled by later Phase 4 gates. Gate 3 now adds the authentication and tenant authorization boundary; Gate 4 remains responsible for input and abuse controls.
+Authentication/authorization is now implemented by Gate 3, while input validation, payload limits, rate limiting, abuse controls, and stronger AI request hardening are implemented by Gate 4. Final verification remains dependent on the Phase 4 CI run.
 
 No destructive migration, dependency upgrade, broad rewrite, or unrelated application behavior change was introduced.
