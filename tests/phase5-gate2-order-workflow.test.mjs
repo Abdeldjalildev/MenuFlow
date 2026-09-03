@@ -5,9 +5,9 @@ import { getAuth, signInAnonymously, signInWithCustomToken, connectAuthEmulator 
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
 import { getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc } from 'firebase/firestore';
 import { readFile } from 'node:fs/promises';
-import { getAuth as getAdminAuth } from 'firebase-admin/auth';
-import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
-import { initializeApp as initializeAdminApp, getApps as getAdminApps } from 'firebase-admin/app';
+import { getAuth as getAdminAuth } from '../functions/node_modules/firebase-admin/auth/index.js';
+import { getFirestore as getAdminFirestore } from '../functions/node_modules/firebase-admin/firestore/index.js';
+import { initializeApp as initializeAdminApp, getApps as getAdminApps } from '../functions/node_modules/firebase-admin/app/index.js';
 
 const PROJECT_ID = 'demo-menuflow-phase5-gate2';
 const REGION = 'us-central1';
