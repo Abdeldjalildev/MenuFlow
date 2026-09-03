@@ -33,7 +33,8 @@ function validateAIInput(prompt, menuItems) {
 
 async function enforceRateLimit(rateKey) {
   const db = getFirestore();
-  const ref = db.doc(`aiRateLimits/${rateKey}`);
+  const safeRateKey = encodeURIComponent(rateKey);
+  const ref = db.doc(`aiRateLimits/${safeRateKey}`);
   const now = Date.now();
   await db.runTransaction(async tx => {
     const snap = await tx.get(ref);
