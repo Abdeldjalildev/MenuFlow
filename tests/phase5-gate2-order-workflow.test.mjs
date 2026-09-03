@@ -4,7 +4,6 @@ import { createRequire } from 'node:module';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, connectAuthEmulator } from 'firebase/auth';
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
-import { getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc } from 'firebase/firestore';
 import { readFile } from 'node:fs/promises';
 
 const requireFromFunctions = createRequire(new URL('../functions/package.json', import.meta.url));
@@ -25,18 +24,16 @@ const createClient = async (name, mode = 'anonymous') => {
   const app = initializeApp({ apiKey: 'demo-api-key', projectId: PROJECT_ID, appId: `gate2-${name}` }, name);
   clientApps.push(app);
   const auth = getAuth(app);
-  const db = getFirestore(app);
   const functions = getFunctions(app, REGION);
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
-  connectFirestoreEmulator(db, '127.0.0.1', 8080);
   connectFunctionsEmulator(functions, '127.0.0.1', 5001);
   if (mode === 'anonymous') await signInAnonymously(auth);
-  return { app, auth, db, functions };
+  return { app, auth, functions };
 };
 
 const callable = (functions, name) => httpsCallable(functions, name);
-const orderRef = (orderId) => doc(adminDb, `restaurants/${RESTAURANT_A}/orders/${orderId}`);
-const seed = async (path, data) => setDoc(doc(adminDb, path), data);
+const orderRef = (orderId) => adminDb.collection('restaurants').doc(RESTAURANT_A).collection('orders').doc(orderId);
+const seed = async (path, data) => adminDb.doc(path).set(data);
 
 const createStaffClient = async (name, role, restaurantId = RESTAURANT_A) => {
   const user = await adminAuth.createUser({ displayName: name });
@@ -77,7 +74,7 @@ test('Gate 2: createOrder creates a tenant-scoped pending order with server-assi
   const customer = await createClient('customer-create');
   const result = await callable(customer.functions, 'createOrder')({ restaurantId: RESTAURANT_A, tableNumber: '7', items: [{ menuItemId: 'meal-a', recipeId: 'recipe-a', price: 1200, quantity: 2 }], totalAmount: 2400 });
   assert.equal(result.data.ok, true);
-  const order = (await getDoc(orderRef(result.data.orderId))).data();
+  const order = (await orderRef(result.data.orderId).get()).data();
   assert.equal(order.restaurantId, RESTAURANT_A);
   assert.equal(order.customerId, customer.auth.currentUser.uid);
   assert.equal(order.status, 'pending');
@@ -101,8 +98,8 @@ test('Gate 2: preparation atomically deducts inventory and marks the order once'
   const kitchen = await createStaffClient('kitchen-stock', 'Kitchen');
   const result = await callable(kitchen.functions, 'transitionOrder')({ orderId: 'order-a', newStatus: 'preparing', restaurantId: RESTAURANT_A });
   assert.equal(result.data.status, 'preparing');
-  const order = (await getDoc(orderRef('order-a'))).data();
-  const inventory = (await getDoc(doc(adminDb, `restaurants/${RESTAURANT_A}/inventory/flour`))).data();
+  const order = (await orderRef('order-a').get()).data();
+  const inventory = (await adminDb.doc(`restaurants/${RESTAURANT_A}/inventory/flour`).get()).data();
   assert.equal(order.inventoryDeducted, true);
   assert.equal(inventory.currentQuantity, 4);
   assert.equal(inventory.quantity, 4);
@@ -120,8 +117,8 @@ test('Gate 2: concurrent preparation attempts deduct inventory only once', async
   ]);
   assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
   assert.equal(results.filter((result) => result.status === 'rejected').length, 1);
-  const order = (await getDoc(orderRef('order-a'))).data();
-  const inventory = (await getDoc(doc(adminDb, `restaurants/${RESTAURANT_A}/inventory/flour`))).data();
+  const order = (await orderRef('order-a').get()).data();
+  const inventory = (await adminDb.doc(`restaurants/${RESTAURANT_A}/inventory/flour`).get()).data();
   assert.equal(order.status, 'preparing');
   assert.equal(order.inventoryDeducted, true);
   assert.equal(inventory.currentQuantity, 4);
@@ -133,8 +130,8 @@ test('Gate 2: insufficient stock fails closed without changing order or inventor
   await seed(`restaurants/${RESTAURANT_A}/orders/order-a`, { restaurantId: RESTAURANT_A, customerId: 'customer-a', items: [{ recipeId: 'recipe-a', quantity: 3 }], tableNumber: '1', status: 'pending', totalAmount: 1200, inventoryDeducted: false });
   const kitchen = await createStaffClient('kitchen-insufficient', 'Kitchen');
   await assert.rejects(() => callable(kitchen.functions, 'transitionOrder')({ orderId: 'order-a', newStatus: 'preparing', restaurantId: RESTAURANT_A }), (error) => error.code === 'functions/failed-precondition');
-  const order = (await getDoc(orderRef('order-a'))).data();
-  const inventory = (await getDoc(doc(adminDb, `restaurants/${RESTAURANT_A}/inventory/flour`))).data();
+  const order = (await orderRef('order-a').get()).data();
+  const inventory = (await adminDb.doc(`restaurants/${RESTAURANT_A}/inventory/flour`).get()).data();
   assert.equal(order.status, 'pending');
   assert.equal(order.inventoryDeducted, false);
   assert.equal(inventory.currentQuantity, 5);
