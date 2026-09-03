@@ -4,7 +4,7 @@
 
 Implemented server-side controls for the privileged AI endpoint:
 
-- Prompt must be a non-empty string and is capped at 4,000 characters.
+- Prompt must be a non-empty string and is capped at 12,000 characters.
 - Menu payload is capped at 100 items and 60,000 serialized characters.
 - Menu serialization failures are rejected instead of being sent upstream.
 - A Firestore transaction provides a per-caller request budget of 10 requests per 60-second window.
@@ -12,6 +12,8 @@ Implemented server-side controls for the privileged AI endpoint:
 - The rate-limit key is tenant-scoped and caller-scoped.
 - Provider transport remains bounded by the existing 15-second timeout.
 - No privileged AI credential is exposed to browser code.
+
+The 12,000-character prompt ceiling intentionally accommodates the existing customer AI flow, which embeds the menu context into the prompt before sending the request.
 
 ## Gate 5 — AI Security Regression + CI Verification
 
