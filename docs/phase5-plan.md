@@ -22,16 +22,8 @@ Create a deterministic unit-test foundation for pure/reusable business logic and
 - Edge cases: empty values, whitespace, invalid numbers, zero/negative values, fractional values, maximum sizes, and malformed payloads.
 - A focused test command and inclusion in `npm test`.
 
-### Explicit boundary
-Gate 1 does not attempt to prove Firestore transactions, security rules, authentication claims, concurrent writes, or browser routing. Those require integration/emulator coverage in later gates.
-
-### Evidence required
-- Deterministic Node test suite passes.
-- Existing Phase 2–4 regression suites remain green.
-- No production behavior is changed merely to satisfy unit tests.
-
 ### Implementation state
-**IMPLEMENTED — verification deferred to final Phase 5 CI.**
+**IMPLEMENTED — final verification performed in Gate 5.**
 
 ## Gate 2 — Critical Order Workflow Integration
 
@@ -54,11 +46,8 @@ Prove the server-authoritative order lifecycle and integrity guarantees through 
 - Firebase Auth, Firestore, and Functions emulator ports are explicitly configured in `firebase.json`.
 - Dedicated scripts are registered in `package.json`.
 
-### Exit condition
-The highest-risk Phase 3 guarantees are demonstrated through executable integration behavior, not only static source checks.
-
 ### Implementation state
-**IMPLEMENTED — verification deferred to final Phase 5 CI.**
+**IMPLEMENTED — final verification performed in Gate 5.**
 
 ## Gate 3 — Customer Critical Path + Firestore Integration
 
@@ -75,16 +64,8 @@ Prove the public customer flow from anonymous identity through ordering and post
 - Malformed and oversized customer writes.
 - Regression validation for `OrderProvider.appendToOrder`, whose direct mutation of `items` and `totalAmount` must be reconciled with the current `validOrderMutation` rules before being considered healthy.
 
-### Implementation
-- `tests/phase5-gate3-customer-firestore.test.mjs` exercises the Firestore security contract with the Firebase Emulator.
-- The append-order mismatch is captured as an expected failure/finding rather than fixed by weakening authorization rules.
-- Dedicated Gate 3 test command is registered in `package.json`.
-
-### Exit condition
-The customer-critical path is tested against the Emulator and any permission mismatch is treated as a real defect rather than solved by broadening rules.
-
 ### Implementation state
-**IMPLEMENTED — verification deferred to final Phase 5 CI.**
+**IMPLEMENTED — final verification performed in Gate 5.**
 
 ## Gate 4 — Authentication / RBAC / Tenant / AI Integration
 
@@ -98,31 +79,28 @@ Connect the authentication and authorization model to executable integration tes
 - Tenant mismatch denial.
 - SuperAdmin explicit tenant targeting.
 - AI authentication and authorization ordering.
-- AI validation/rate-limit behavior at the callable boundary.
+- AI validation and rate-limit contract at the callable boundary.
 
-### Exit condition
-Security-sensitive authorization behavior is demonstrated through executable integration tests rather than static assumptions alone.
+### Implementation
+- `tests/phase5-gate4-auth-ai-integration.test.mjs` exercises the Auth and Functions emulators for authentication, role, tenant, and AI callable authorization behavior.
+- Authorized AI calls intentionally stop at server-side validation where possible, avoiding a real Gemini credential or external network dependency.
+- The existing Phase 4 suites continue to cover the concrete provider rate-limit implementation and error mapping.
 
 ### Implementation state
-**DEFERRED — not modified in the current batch.**
+**IMPLEMENTED — final verification pending GitHub Actions.**
 
 ## Gate 5 — CI Expansion + Full Regression
 
 ### Objective
-Make CI execute the proven test suites with the smallest reliable change to the existing pipeline.
+Make CI execute the complete Phase 5 regression contract with the smallest reliable change to the existing pipeline.
 
-### Coverage
-- `npm test` or the smallest equivalent complete test command.
-- Existing `npm ci`.
-- Existing `git diff --check`.
-- Existing lint and build checks.
-- No duplicated or flaky workflow jobs.
-
-### Exit condition
-CI reliably reproduces the local verification contract and adds clear regression value without unnecessary runtime or complexity.
+### Implementation
+- `npm test` now includes Phase 5 Gates 1–4 in addition to the existing Phase 2–4 and Firestore regression suites.
+- `tests/phase5-gate5-ci-contract.test.mjs` verifies the required CI commands and guards against silently weakened checks.
+- `.github/workflows/ci.yml` keeps the existing checkout, `npm ci`, diff check, lint, test, build, and Functions Node 20 validation jobs. Only the regression step is renamed to make its full-suite purpose explicit.
 
 ### Implementation state
-**DEFERRED — not modified in the current batch.**
+**IMPLEMENTED — final verification pending GitHub Actions.**
 
 ## Phase 5 exclusions
 
@@ -142,8 +120,8 @@ The current client path performs a transactional direct update of `items` and `t
 
 ### Client-supplied `totalAmount` integrity gap
 
-`createOrder` calculates an expected total but currently accepts a supplied `totalAmount` without requiring equality with that calculated value. This is documented as a separate integrity hardening opportunity. It is not changed during Gates 1–3 because doing so would expand the approved scope without a dedicated decision.
+`createOrder` calculates an expected total but currently accepts a supplied `totalAmount` without requiring equality with that calculated total. This remains a documented integrity hardening opportunity and is not changed during Phase 5 because doing so would expand the approved scope without a dedicated decision.
 
-## Verification policy for the current batch
+## Verification policy
 
-CI is intentionally **not** evaluated after each gate. Gates 1–3 are considered implementation-complete but not VERIFIED until the full Phase 5 batch reaches its final regression/CI stage.
+Gates 1–4 are implementation-complete. Phase 5 is **not CLOSED** until the final GitHub Actions run passes the complete regression suite, lint, build, Functions validation, and pull-request diff checks.
