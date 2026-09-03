@@ -28,6 +28,6 @@ Gates 2 and 3 strengthen the AI service boundary without changing the customer-f
 
 ## Verification state
 
-**IMPLEMENTED — awaiting CI verification.**
+**VERIFIED — code + local/CI regression evidence.**
 
-Do not mark Gates 2 or 3 as fully verified until the Phase 4 CI run passes. Do not treat static regression tests as proof of deployed production behavior.
+Phase 4 Gates 2–3 are verified at the repository/CI level. This does not claim deployed production behavior. Production deployment of `aiAssistant` was attempted against `menuflow-c02e5` and is currently blocked by the project's closed billing account requirement for `artifactregistry.googleapis.com`.
