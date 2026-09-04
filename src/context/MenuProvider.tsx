@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { MenuContext, type MenuItem } from './MenuContext';
@@ -72,13 +72,18 @@ export const MenuProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, [restaurantId]);
 
-  const setTable = (tableNum: string) => {
+  const setTable = useCallback((tableNum: string) => {
     setCurrentTable(tableNum);
     localStorage.setItem('currentTable', tableNum);
-  };
+  }, []);
+
+  const value = useMemo(
+    () => ({ menuItems, themeColor, currentTable, setTable, restaurantId }),
+    [menuItems, themeColor, currentTable, setTable, restaurantId],
+  );
 
   return (
-    <MenuContext.Provider value={{ menuItems, themeColor, currentTable, setTable, restaurantId }}>
+    <MenuContext.Provider value={value}>
       {children}
     </MenuContext.Provider>
   );
