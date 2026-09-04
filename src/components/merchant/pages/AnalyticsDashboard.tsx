@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { OrderContext, type OrderItem } from '../../../context/OrderProvider';
 import { useOutletContext } from 'react-router-dom';
@@ -22,7 +22,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = (props) => 
   const { orders } = useContext(OrderContext);
   const t = translations[lang].analytics;
 
-  const chartData = orders
+  const chartData = useMemo(() => orders
     .filter((order) => order.status === 'paid' || order.status === 'completed')
     .reduce<ChartEntry[]>((acc, order) => {
       if (Array.isArray(order.items)) {
@@ -45,7 +45,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = (props) => 
         });
       }
       return acc;
-    }, []);
+    }, []), [orders, lang, t.unknownItem]);
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
