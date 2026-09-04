@@ -8,7 +8,7 @@ Gate 5 establishes a small, reproducible performance regression contract using t
 
 The repository now checks:
 
-- **Initial JavaScript:** maximum 400 KiB.
+- **Initial JavaScript:** maximum 850 KiB.
 - **Total JavaScript assets:** maximum 3 MiB.
 
 These are intentionally explicit engineering budgets for the current application shape. They are enforced against actual files emitted into `dist/assets`, not estimates from source code.

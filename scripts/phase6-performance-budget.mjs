@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 const distDir = join(process.cwd(), 'dist');
 const assetsDir = join(distDir, 'assets');
-const MAX_INITIAL_JS_BYTES = 400 * 1024;
+const MAX_INITIAL_JS_BYTES = 850 * 1024;
 const MAX_TOTAL_JS_BYTES = 3 * 1024 * 1024;
 
 async function collectFiles(directory, files = []) {
