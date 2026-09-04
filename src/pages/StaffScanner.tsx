@@ -1,4 +1,6 @@
-import { QrScanner } from '../components/QrScanner';
+import { lazy, Suspense } from 'react';
+
+const QrScanner = lazy(() => import('../components/QrScanner').then(({ QrScanner: Scanner }) => ({ default: Scanner })));
 
 export const StaffScanner = () => {
   const handleScan = (result: string) => {
@@ -18,7 +20,9 @@ export const StaffScanner = () => {
         <p className="text-sm text-slate-500 mb-6">قم بمسح رمز الطاولة لبدء الجلسة</p>
         
         <div className="overflow-hidden rounded-2xl border-4 border-indigo-100">
-           <QrScanner onScanSuccess={handleScan} />
+          <Suspense fallback={<div className="h-[300px] flex items-center justify-center text-sm text-slate-500">جاري تحميل الماسح...</div>}>
+            <QrScanner onScanSuccess={handleScan} />
+          </Suspense>
         </div>
       </div>
     </div>
