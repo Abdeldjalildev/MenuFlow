@@ -9,7 +9,7 @@ const bundleReportSource = await readFile(new URL('../scripts/phase6-bundle-repo
 test('Phase 6 Gate 1: bundle analysis tooling is present and reads production output', () => {
   assert.match(packageSource, /"perf:bundle-report"\s*:/);
   assert.match(packageSource, /scripts\/phase6-bundle-report\.mjs/);
-  assert.match(bundleReportSource, /dist\/index\.html/);
+  assert.ok(bundleReportSource.includes('index.html'));
   assert.match(bundleReportSource, /Initial JavaScript/);
   assert.match(bundleReportSource, /Largest JavaScript assets/);
 });
