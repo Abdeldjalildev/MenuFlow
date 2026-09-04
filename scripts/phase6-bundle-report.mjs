@@ -19,7 +19,7 @@ function formatBytes(bytes) {
 }
 
 const html = await readFile(join(distDir, 'index.html'), 'utf8');
-const initialAssetNames = [...html.matchAll(/(?:src|href)=["']\.\/assets\/([^"']+)["']/g)].map((match) => match[1]);
+const initialAssetNames = [...html.matchAll(/(?:src|href)=["'](?:\.\/)?assets\/([^"']+)["']/g)].map((match) => match[1]);
 const initialAssetSet = new Set(initialAssetNames);
 const files = await collectFiles(assetsDir);
 const records = await Promise.all(files.map(async (path) => {
