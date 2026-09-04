@@ -20,9 +20,9 @@ test('Phase 6 Gate 5: budget checks use production dist output rather than sourc
 });
 
 test('Phase 6 Gate 5: asset detection supports Vite root-relative and relative URLs', () => {
-  const expectedAssetPattern = /(?:\.\/|\/)?assets\\\//;
-  assert.match(budgetSource, expectedAssetPattern);
-  assert.match(bundleReportSource, expectedAssetPattern);
-  assert.match(budgetSource, /split\(\/[\?#\]\/\)/);
-  assert.match(bundleReportSource, /split\(\/[\?#\]\/\)/);
+  const expectedAssetPattern = `(?:src|href)=["'](?:\\.\\/|\\/)?assets\\/`;
+  assert.ok(budgetSource.includes(expectedAssetPattern));
+  assert.ok(bundleReportSource.includes(expectedAssetPattern));
+  assert.ok(budgetSource.includes('.split(/[?#]/, 1)'));
+  assert.ok(bundleReportSource.includes('.split(/[?#]/, 1)'));
 });
