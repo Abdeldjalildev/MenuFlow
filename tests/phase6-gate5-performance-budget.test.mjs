@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const budgetSource = await readFile(new URL('../scripts/phase6-performance-budget.mjs', import.meta.url), 'utf8');
-
+const bundleReportSource = await readFile(new URL('../scripts/phase6-bundle-report.mjs', import.meta.url), 'utf8');
 
 test('Phase 6 Gate 5: performance budget is wired into the regression suite', () => {
   assert.equal(packageJson.scripts['test:phase6:gate5'], 'npm run build && npm run perf:bundle-report && node scripts/phase6-performance-budget.mjs');
@@ -17,4 +17,12 @@ test('Phase 6 Gate 5: budget checks use production dist output rather than sourc
   assert.match(budgetSource, /join\(process\.cwd\(\), 'dist'\)/);
   assert.match(budgetSource, /readFile\(join\(distDir, 'index\.html'\)/);
   assert.match(budgetSource, /stat\(path\)/);
+});
+
+test('Phase 6 Gate 5: asset detection supports Vite root-relative and relative URLs', () => {
+  const expectedAssetPattern = /(?:\.\/|\/)?assets\\\//;
+  assert.match(budgetSource, expectedAssetPattern);
+  assert.match(bundleReportSource, expectedAssetPattern);
+  assert.match(budgetSource, /split\(\/[\?#\]\/\)/);
+  assert.match(bundleReportSource, /split\(\/[\?#\]\/\)/);
 });
