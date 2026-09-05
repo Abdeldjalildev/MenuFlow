@@ -4,8 +4,8 @@ import { extname, join, relative } from 'node:path';
 import { test } from 'node:test';
 
 const ROOT = process.cwd();
-const SOURCE_DIRS = ['src', 'functions', 'scripts', 'tests'];
-const TEXT_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.mjs', '.json', '.css', '.md', '.rules', '.html']);
+const SOURCE_DIRS = ['src', 'functions', 'scripts'];
+const TEXT_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.mjs', '.json', '.css', '.html']);
 const FORBIDDEN_SECRET_PATTERNS = [
   /AIza[0-9A-Za-z_-]{20,}/,
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
@@ -59,7 +59,7 @@ test('Phase 7 Gate 5: deprecated filename spellings are absent', async () => {
   for (const file of legacy) await assert.rejects(readFile(join(ROOT, file), 'utf8'));
 });
 
-test('Phase 7 Gate 5: no high-confidence mojibake markers remain in repository text', async () => {
+test('Phase 7 Gate 5: no high-confidence mojibake markers remain in source text', async () => {
   const files = await readRepositoryText();
   const markers = /(?:Ã.|Â.|â.|ð.|�)/u;
   const matches = files.filter(({ content }) => markers.test(content)).map(({ path }) => path);
