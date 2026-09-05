@@ -12,9 +12,31 @@ interface Props {
   themeColor: string;
 }
 
-export const MenuOrOrderManager: React.FC<Props> = ({ showDeliveryForm, isOrderPlaced, currentOrder, onDeliveryConfirm, t, themeColor }) => {
+export const MenuOrOrderManager: React.FC<Props> = ({
+  showDeliveryForm,
+  isOrderPlaced,
+  currentOrder,
+  onDeliveryConfirm,
+  t,
+  themeColor,
+}) => {
   const trackingRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { if ((showDeliveryForm || isOrderPlaced) && trackingRef.current) trackingRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [showDeliveryForm, isOrderPlaced]);
+
+  useEffect(() => {
+    if ((showDeliveryForm || isOrderPlaced) && trackingRef.current) {
+      trackingRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [showDeliveryForm, isOrderPlaced]);
+
   if (!showDeliveryForm && !currentOrder && !isOrderPlaced) return null;
-  return <div ref={trackingRef} className="mb-6">{showDeliveryForm ? <DeliveryForm onConfirm={onDeliveryConfirm} t={t} themeColor={themeColor} /> : <OrderTracking t={t} />}</div>;
+
+  return (
+    <div ref={trackingRef} className="mb-6">
+      {showDeliveryForm ? (
+        <DeliveryForm onConfirm={onDeliveryConfirm} t={t} themeColor={themeColor} />
+      ) : (
+        <OrderTracking t={t} />
+      )}
+    </div>
+  );
 };
