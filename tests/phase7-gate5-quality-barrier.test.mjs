@@ -69,10 +69,18 @@ test('Phase 7 Gate 5: deprecated filename spellings are absent', async () => {
   }
 });
 
+// Detect known mojibake sequences without flagging valid UTF-8 text such as French "Pâtes".
+const MOJIBAKE_MARKERS = [
+  /Ã(?:[\u0080-\u00BF]|[©®])/u,
+  /Â(?:[\u0000-\u00BF]|°|©|®|™)/u,
+  /â€(?:[™œž])/u,
+  /ðŸ(?:[\u0080-\u00BF])/u,
+  /�/u,
+];
+
 test('Phase 7 Gate 5: no high-confidence mojibake markers remain in source text', async () => {
   const files = await readRepositoryText();
-  const markers = /(?:Ã.|Â.|â.|ð.|�)/u;
-  const matches = files.filter(({ content }) => markers.test(content)).map(({ path }) => path);
+  const matches = files.filter(({ content }) => MOJIBAKE_MARKERS.some((marker) => marker.test(content))).map(({ path }) => path);
   assert.deepEqual(matches, []);
 });
 
