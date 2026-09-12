@@ -1,4 +1,4 @@
-{
+﻿{
   "functions": {
     "source": "functions"
   },
@@ -16,5 +16,8 @@
       "enabled": false
     },
     "singleProjectMode": true
+  },
+  "firestore": {
+    "rules": "firestore.rules"
   }
 }

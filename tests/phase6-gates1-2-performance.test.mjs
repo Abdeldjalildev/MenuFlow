@@ -17,7 +17,7 @@ test('Phase 6 Gate 1: bundle analysis tooling is present and reads production ou
 test('Phase 6 Gate 2: route components are loaded through React.lazy', () => {
   const expectedLazyImports = [
     './components/customer/CustomerMenu',
-    './components/kitchen/kitchenDashboard',
+    './components/kitchen/KitchenDashboard',
     './components/merchant/MerchantDashboard',
     './pages/TableEntry',
     './pages/StaffScanner',
@@ -31,8 +31,8 @@ test('Phase 6 Gate 2: route components are loaded through React.lazy', () => {
     './components/merchant/pages/Suppliers',
     './components/merchant/pages/Staff',
     './components/merchant/pages/StaffPerformance',
-    './components/merchant/pages/Exepenses',
-    './components/merchant/pages/Wastelog',
+    './components/merchant/pages/Expenses',
+    './components/merchant/pages/WasteLog',
     './components/merchant/pages/Complaints',
     './components/merchant/pages/Reports',
     './components/merchant/pages/ControlPanel',
