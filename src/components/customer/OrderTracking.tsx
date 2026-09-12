@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { OrderContext } from '../../context/OrderProvider';
-import { OrderStatus } from './orderStatus';
+import { OrderStatus } from './OrderStatus';
 import { useMenu } from '../../context/MenuContext';
 import { auth } from '../../firebase';
 

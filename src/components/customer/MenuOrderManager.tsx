@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { DeliveryForm } from './DeliveryuForm';
+import { DeliveryForm } from './DeliveryForm';
 import { OrderTracking } from './OrderTracking';
 import type { Order } from '../../context/OrderProvider';
 

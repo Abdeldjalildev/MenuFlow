@@ -8,7 +8,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 
 // Route-level lazy loading keeps feature-specific code out of the initial bundle.
 const CustomerMenu = lazy(() => import('./components/customer/CustomerMenu').then(({ CustomerMenu }) => ({ default: CustomerMenu })));
-const KitchenDashboard = lazy(() => import('./components/kitchen/kitchenDashboard').then(({ KitchenDashboard }) => ({ default: KitchenDashboard })));
+const KitchenDashboard = lazy(() => import('./components/kitchen/KitchenDashboard').then(({ KitchenDashboard }) => ({ default: KitchenDashboard })));
 const MerchantDashboard = lazy(() => import('./components/merchant/MerchantDashboard').then(({ MerchantDashboard }) => ({ default: MerchantDashboard })));
 const TableEntry = lazy(() => import('./pages/TableEntry').then(({ TableEntry }) => ({ default: TableEntry })));
 const StaffScanner = lazy(() => import('./pages/StaffScanner').then(({ StaffScanner }) => ({ default: StaffScanner })));
@@ -24,8 +24,8 @@ const Customers = lazy(() => import('./components/merchant/pages/Customers').the
 const Suppliers = lazy(() => import('./components/merchant/pages/Suppliers').then(({ Suppliers }) => ({ default: Suppliers })));
 const Staff = lazy(() => import('./components/merchant/pages/Staff').then(({ Staff }) => ({ default: Staff })));
 const StaffPerformance = lazy(() => import('./components/merchant/pages/StaffPerformance').then(({ StaffPerformance }) => ({ default: StaffPerformance })));
-const Expenses = lazy(() => import('./components/merchant/pages/Exepenses').then(({ Expenses }) => ({ default: Expenses })));
-const WasteLog = lazy(() => import('./components/merchant/pages/Wastelog').then(({ WasteLog }) => ({ default: WasteLog })));
+const Expenses = lazy(() => import('./components/merchant/pages/Expenses').then(({ Expenses }) => ({ default: Expenses })));
+const WasteLog = lazy(() => import('./components/merchant/pages/WasteLog').then(({ WasteLog }) => ({ default: WasteLog })));
 const Complaints = lazy(() => import('./components/merchant/pages/Complaints').then(({ Complaints }) => ({ default: Complaints })));
 const Reports = lazy(() => import('./components/merchant/pages/Reports').then(({ Reports }) => ({ default: Reports })));
 const ControlPanel = lazy(() => import('./components/merchant/pages/ControlPanel').then(({ ControlPanel }) => ({ default: ControlPanel })));
