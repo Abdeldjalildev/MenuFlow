@@ -93,35 +93,43 @@ All five gates are implemented and the full phase has been deep-audited. No Phas
 
 ## Phase 14 — SaaS Commercialization & Launch Foundations
 
-**PLANNED — DEEP-AUDITED — NOT AUTHORIZED FOR IMPLEMENTATION**
+**GATES 14.1–14.2 IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING — NOT CLOSED**
 
-Phase 14 is intentionally not implemented until Phase 13 verification/closure is complete.
+Gates 14.1 and 14.2 were implemented together. Gates 14.3–14.5 remain planned and unauthorized.
 
 ### Gate 14.1 — Production Environment & Deployment Contract
 
-Production/test separation, environment inventory, reproducible build/deploy contract, secrets boundary, smoke tests and rollback procedure.
+**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
+
+Implemented the production/test/local configuration contract, Node 20/us-central1 deployment assumptions, secrets boundary, production smoke-test contract, rollback contract, and static contract test. No production deployment was executed or claimed.
+
+Verification: `npm run test:phase14:gate1`
 
 ### Gate 14.2 — Restaurant Onboarding & Tenant Lifecycle
 
-Canonical restaurant creation, initial Admin provisioning, safe defaults, lifecycle state, QR/settings initialization and reversible legacy-path reconciliation.
+**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
+
+Implemented the SuperAdmin-only canonical `createRestaurant` callable, initial Admin membership provisioning, recoverable `provisioning` lifecycle state, server-authoritative Admin claim publication, active transition after successful claim publication, compensating cleanup on claim failure, onboarding audit, and static contract test.
+
+Verification: `npm run test:phase14:gate2`
 
 ### Gate 14.3 — Plans, Entitlements & Billing Boundary
 
-Plan vocabulary, server-authoritative entitlements, subscription lifecycle, webhook idempotency, grace/cancellation/failure policy, then payment-provider evaluation.
+**PLANNED — NOT AUTHORIZED**
 
 ### Gate 14.4 — Commercial UX, Limits & Operational Self-Service
 
-Plan/status UI, server-derived usage/limits, upgrade/downgrade flows, account settings, commercial notices and AR/EN/FR/RTL coverage.
+**PLANNED — NOT AUTHORIZED**
 
 ### Gate 14.5 — SaaS Launch & Commercial Readiness Closure
 
-End-to-end onboarding, entitlement/billing verification, security regression, production smoke/rollback evidence, support documentation and final evidence-based launch decision.
+**PLANNED — NOT AUTHORIZED**
 
 ### Phase 14 dependency order
 
 `14.1 → 14.2 → 14.3 → 14.4 → 14.5`
 
-Full plan: `docs/phase14-saas-commercialization-deep-audit.md`
+Full plan/audit: `docs/phase14-saas-commercialization-deep-audit.md`
 
 ## Operating rule
 
