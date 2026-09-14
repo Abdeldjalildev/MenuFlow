@@ -2,119 +2,122 @@
 
 ## Audit status
 
-**GATES 14.1–14.2 IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING — NOT CLOSED**
+**GATES 14.1–14.4 IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING — NOT CLOSED**
 
-Gates 14.1 and 14.2 were implemented together under the evidence-first phase contract. Gates 14.3–14.5 remain planned and are not implemented.
-
-Phase 13 remains the prerequisite for production closure; implementing these repository contracts does not bypass Phase 13 verification.
-
-## Why Phase 14 exists
-
-The current system already has the core restaurant operating model, multi-tenant authorization, canonical ordering, waiter workflow, operations, notifications and analytics. The next major risk is turning the verified system into a safely operable SaaS product without weakening tenant isolation or introducing billing state that the application cannot reliably reconcile.
-
-The phase therefore focuses on commercial and launch foundations, not speculative feature expansion.
+Gates 14.1–14.4 were implemented under the evidence-first phase contract. Gate 14.5 remains planned and unauthorized. Phase 13 remains the prerequisite for production closure; Phase 14 implementation does not bypass that verification.
 
 ## Gate 14.1 — Production Environment & Deployment Contract
 
-**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
-
-Implemented:
-
-- repository-level production/test/local environment contract;
-- explicit Functions Node 20 and `us-central1` contract;
-- reproducible frontend build contract;
-- secrets boundary and no-secret-in-repository rule;
-- production smoke-test contract;
-- operator-controlled rollback contract;
-- dedicated static Gate 14.1 test and package script.
-
-Implementation artifact: `docs/phase14-gate1-production-environment.md`
-
-Verification command: `npm run test:phase14:gate1`
-
-Important boundary: **no production deployment was executed or claimed.** Actual deployment and smoke verification require explicit operator authorization and real production credentials.
+Implemented the production/test/local contract, Node 20/us-central1 assumptions, secrets boundary, smoke-test contract and operator rollback contract. No production deployment was executed.
 
 ## Gate 14.2 — Restaurant Onboarding & Tenant Lifecycle
 
+Implemented canonical SuperAdmin-only restaurant creation, initial Admin membership, recoverable provisioning state, claim publication, active transition after claim success, compensating cleanup and onboarding audit.
+
+## Gate 14.3 — Plans, Entitlements & Billing Boundary
+
 **IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
 
 Implemented:
 
-- canonical backend `createRestaurant` callable in `functions/tenantOnboarding.js`;
-- SuperAdmin-only creation authority;
-- initial Admin membership under `restaurants/{restaurantId}/admins/{adminUid}`;
-- recoverable `provisioning` lifecycle state;
-- Admin claim publication only after tenant/membership provisioning;
-- active lifecycle transition only after successful claim publication;
-- compensating cleanup on claim failure;
-- diagnostic logging for cleanup/activation failures without secrets;
-- safe DZD/analytics defaults only;
-- onboarding audit event;
-- dedicated static Gate 14.2 test and package script.
+- explicit `starter` and `growth` plan vocabulary;
+- explicit subscription states: `trialing`, `active`, `past_due`, `grace_period`, `canceled`, `suspended`;
+- server-derived entitlement snapshot;
+- tenant-scoped commercial state under `restaurants/{restaurantId}/commercial/subscription`;
+- Admin/SuperAdmin read boundary;
+- SuperAdmin-only authoritative commercial-state mutation;
+- tenant-scoped plan-change request boundary;
+- provider-neutral billing event vocabulary without adding a provider dependency.
 
-Implementation artifact: `docs/phase14-gate2-tenant-lifecycle.md`
+### Deep-audit protections
 
-Verification command: `npm run test:phase14:gate2`
+- The browser cannot grant itself entitlements.
+- Plan-change requests do not mutate subscription state.
+- Commercial state is separate from order/pricing data.
+- No payment provider was selected before policy definition.
+- No billing dependency was added.
 
-Important boundary: the Auth claim operation cannot be part of a Firestore transaction. The explicit provisioning state and compensating cleanup are therefore part of the reliability contract; no false atomicity is claimed.
-
-## Gate 14.3 — Plans, Entitlements & Billing Boundary
-
-**PLANNED — NOT AUTHORIZED**
-
-No plan, entitlement, subscription or payment provider implementation is included in Gates 14.1–14.2.
+Verification: `npm run test:phase14:gate3`
 
 ## Gate 14.4 — Commercial UX, Limits & Operational Self-Service
 
-**PLANNED — NOT AUTHORIZED**
+**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
+
+Implemented:
+
+- protected merchant commercial route at `/merchant/commercial`;
+- server-derived plan/subscription/entitlement display;
+- tenant-scoped upgrade/downgrade request entry points;
+- server-created pending change requests;
+- no client-side entitlement mutation;
+- no sensitive provider/payment data in the UI;
+- no speculative usage counters.
+
+### Deep-audit protections
+
+- Admin/SuperAdmin route protection remains in force.
+- Commercial state is read through a trusted callable rather than raw browser reads.
+- Plan changes are requests only; authorization state remains server-controlled.
+- Usage counters are deferred until authoritative usage and limit policies exist.
+- Existing merchant localization/layout infrastructure is reused rather than duplicated.
+
+Verification: `npm run test:phase14:gate4`
 
 ## Gate 14.5 — SaaS Launch & Commercial Readiness Closure
 
 **PLANNED — NOT AUTHORIZED**
 
+## Required verification before closure
+
+### Gates 14.1–14.4
+
+1. `npm run test:phase14:gate1`
+2. `npm run test:phase14:gate2`
+3. `npm run test:phase14:gate3`
+4. `npm run test:phase14:gate4`
+5. `npm test`
+6. Runtime/emulator evidence for tenant isolation, role boundaries, onboarding recovery, entitlement derivation and commercial request flows.
+
+### Gate 14.1 production evidence
+
+- authorized production deployment;
+- smoke test for auth, tenant access, order creation and analytics;
+- operator-validated rollback.
+
+### Gate 14.2 onboarding evidence
+
+- SuperAdmin success;
+- unauthenticated/non-SuperAdmin denial;
+- successful tenant + Admin provisioning;
+- claim-failure recovery;
+- cross-tenant denial.
+
+### Gate 14.3 billing-boundary evidence
+
+- unauthorized commercial mutation denial;
+- tenant isolation;
+- lifecycle-to-entitlement correctness;
+- duplicate/request safety before provider integration.
+
+### Gate 14.4 UX evidence
+
+- protected route;
+- server-derived commercial state;
+- request creation without entitlement mutation;
+- AR/EN/FR/RTL regression through existing merchant shell where applicable.
+
+## Scope boundaries preserved
+
+- No production deployment.
+- No payment provider integration.
+- No speculative billing dependency.
+- No destructive migration.
+- No client-authoritative subscription state.
+- No mixing billing data with operational order data.
+- No canonical order-engine rewrite.
+- No dependency upgrades.
+- No broad refactor.
+
 ## Dependency order
 
 `14.1 Production Environment → 14.2 Tenant Lifecycle → 14.3 Plans/Entitlements/Billing → 14.4 Commercial UX/Self-Service → 14.5 Launch Closure`
-
-## Deep-audit findings and scope protections
-
-1. Production deployment was intentionally not performed.
-2. Self-service tenant creation was intentionally not enabled; SuperAdmin is the only onboarding authority for now.
-3. Firebase Auth claims are external to Firestore transactions, so onboarding uses a recoverable provisioning state instead of claiming atomicity.
-4. Claim-failure cleanup is compensating rather than transactional across Auth and Firestore.
-5. No billing/provider dependency was introduced before the entitlement policy gate.
-6. No legacy tenant path was silently migrated.
-7. The canonical order engine was not modified to support onboarding.
-8. Existing tenant authorization boundaries remain authoritative.
-9. No dependency versions were intentionally changed.
-
-## Required verification before closure
-
-### Gate 14.1
-
-- `npm run test:phase14:gate1`;
-- reproducible production build;
-- authorized production rules/functions deployment;
-- production smoke test for auth, tenant access, order creation and analytics;
-- operator-validated rollback.
-
-### Gate 14.2
-
-- `npm run test:phase14:gate2`;
-- emulator/runtime authorized SuperAdmin onboarding;
-- denial for unauthenticated and non-SuperAdmin callers;
-- successful tenant + Admin provisioning;
-- claim-failure recovery;
-- active lifecycle transition after claim publication;
-- cross-tenant denial for the newly provisioned Admin;
-- regression of existing order/analytics/security suites.
-
-## Phase 14 deep-audit boundaries
-
-- Do not select a payment provider before the entitlement contract is defined.
-- Do not trust client-side plan or subscription state.
-- Do not mix billing data with authoritative restaurant operational data.
-- Do not migrate legacy tenant paths without production inventory and a reversible cutover.
-- Do not introduce usage counters, queues, caches or external billing dependencies speculatively.
-- Do not change the canonical order engine to support commercial features.
-- Do not weaken existing Admin/SuperAdmin/Waiter/other role boundaries.
