@@ -33,9 +33,9 @@ test('Gate 11.3: canonical historical modifier snapshot is persisted in order it
   assert.match(creation, /items: authoritative\.items/);
 });
 
-test('Gate 11.3: waiter/customer boundaries can pass modifier IDs without becoming pricing authority', () => {
+test('Gate 11.3: waiter/customer ordering remains inside the canonical server boundary', () => {
   assert.match(waiter, /items/);
-  assert.match(pricing, /Client-supplied price|client/);
+  assert.match(creation, /normalizeItems/);
   assert.match(menu, /MenuItem/);
 });
 
