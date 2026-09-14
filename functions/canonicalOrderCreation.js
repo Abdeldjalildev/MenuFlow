@@ -49,7 +49,8 @@ const createOrder = onCall(async request => {
   const orderSource = request.data?.orderSource || 'customer';
   const mutationId = request.data?.mutationId;
   if (!isNonEmptyString(restaurantId)) throw new HttpsError('invalid-argument', 'restaurantId is required.');
-  if (!isNonEmptyString(tableNumber) || tableNumber.length > 32) throw new HttpsError('invalid-argument', 'tableNumber must be a non-empty string of at most 32 characters.');
+  if (!isNonEmptyString(tableNumber) || tableNumber.trim().length > 32) throw new HttpsError('invalid-argument', 'tableNumber must be a non-empty string of at most 32 characters.');
+  if (orderSource === 'waiter' && tableNumber.trim() === '0') throw new HttpsError('invalid-argument', 'Waiter orders require a real table number.');
   if (mutationId !== undefined && (!isNonEmptyString(mutationId) || mutationId.length > 128)) throw new HttpsError('invalid-argument', 'mutationId must be a non-empty string of at most 128 characters.');
 
   const actor = await assertCreationActor(request, restaurantId, orderSource);
@@ -93,7 +94,7 @@ const createOrder = onCall(async request => {
       restaurantId, orderSource,
       ...(actor.customerId ? { customerId: actor.customerId } : {}),
       ...(actor.waiterId ? { waiterId: actor.waiterId, waiterName: actor.waiterName || null } : {}),
-      items: authoritative.items, tableNumber, status: 'pending', subtotal: authoritative.subtotal, discountAmount: authoritative.discountAmount, totalAmount: authoritative.totalAmount,
+      items: authoritative.items, tableNumber: tableNumber.trim(), status: 'pending', subtotal: authoritative.subtotal, discountAmount: authoritative.discountAmount, totalAmount: authoritative.totalAmount,
       customerName: typeof deliveryData?.name === 'string' ? deliveryData.name : '', customerPhone: deliveryData?.phone || '', deliveryAddress: deliveryData?.address || '', deliveryData,
       createdAt: new Date(), driverName: null, driverId: null, isClaimed: false, orderNumber, orderNumberDate,
     };
