@@ -15,12 +15,9 @@ const protectedRouteSource = await readFile(new URL('../src/routes/ProtectedRout
 // ============================================================
 
 test('Gate 8.5: SuperAdmin authorization is claims-based, not email-based', () => {
-  // The SuperAdminDashboard should use getAuthzClaims, not hardcoded email
   assert.match(superAdminSource, /getAuthzClaims/);
   assert.match(superAdminSource, /checkSuperAdminClaims/);
   assert.match(superAdminSource, /claims\?\.role === 'SuperAdmin'/);
-  
-  // Should NOT have hardcoded email authorization
   assert.doesNotMatch(superAdminSource, /SUPER_ADMIN_EMAIL/);
   assert.doesNotMatch(superAdminSource, /abdeldjalilkhalfa/);
 });
@@ -32,7 +29,21 @@ test('Gate 8.5: getAuthzClaims reads from trusted ID token only', () => {
   assert.doesNotMatch(authClaimsSource, /URLSearchParams/);
 });
 
-test('Gate 8.5: Functions enforce cross-tenant isolation for claims', () => {
+test('Gate 8.5: Admin authorization is membership-based in callable Functions', () => {
+  assert.match(functionsSource, /async function isAdminOfRestaurant/);
+  assert.match(functionsSource, /role.*!== 'Admin'/);
+  assert.match(functionsSource, /admins\/\$\{adminUid\}/);
+  assert.match(functionsSource, /membershipSnap\.exists/);
+  assert.doesNotMatch(functionsSource, /if \(callerToken\?\.restaurantId === restaurantId\) return true/);
+});
+
+test('Gate 8.5: Admin authorization is membership-based in Firestore rules', () => {
+  assert.match(rulesSource, /function hasAdminMembership/);
+  assert.match(rulesSource, /exists\(\/databases\/\$\(database\)\/documents\/restaurants\/\$\(restaurantId\)\/admins\/\$\(request\.auth\.uid\)\)/);
+  assert.match(rulesSource, /role\(\) == 'Admin' && hasAdminMembership\(restaurantId\)/);
+});
+
+test('Gate 8.5: Functions enforce cross-tenant isolation for claims provisioning', () => {
   assert.match(functionsSource, /Cross-tenant claim provisioning is forbidden/);
   assert.match(functionsSource, /callerRestaurantId !== restaurantId/);
 });
@@ -60,9 +71,17 @@ test('Gate 8.5: AdminMembership function verifies target is Admin', () => {
   assert.match(functionsSource, /Target user is not an Admin/);
 });
 
-test('Gate 8.5: Firestore rules enforce tenant isolation', () => {
-  assert.match(rulesSource, /isTenantRole/);
-  assert.match(rulesSource, /restaurantClaim\(\) == restaurantId/);
+test('Gate 8.5: Admin provisioning establishes membership before publishing Admin claims', () => {
+  const membershipIndex = functionsSource.indexOf('adminMembershipCreated = true');
+  const claimsIndex = functionsSource.indexOf('setCustomUserClaims(targetUid, claims)');
+  assert.ok(membershipIndex >= 0, 'Admin membership creation marker must exist');
+  assert.ok(claimsIndex > membershipIndex, 'Admin claims must be published after membership creation');
+  assert.match(functionsSource, /Failed to roll back AdminMembership after claim failure/);
+});
+
+test('Gate 8.5: AI authorization awaits membership verification', () => {
+  assert.match(functionsSource, /await assertAIAuthorization\(request, restaurantId\)/);
+  assert.match(functionsSource, /if \(await isAdminOfRestaurant\(auth\.uid, restaurantId, auth\.token\)\) return/);
 });
 
 test('Gate 8.5: Firestore rules have SuperAdmin check function', () => {
