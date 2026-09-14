@@ -8,6 +8,7 @@ const DIAGNOSTIC_OPERATIONS = new Set([
   'order_transition',
   'analytics_summary',
   'operational_notification',
+  'tenant_onboarding',
 ]);
 
 const ERROR_CATEGORIES = new Set([
@@ -33,11 +34,13 @@ function sanitizeDiagnosticContext(context = {}) {
   const actorUid = sanitizeId(context.actorUid);
   const orderId = sanitizeId(context.orderId);
   const requestId = sanitizeId(context.requestId);
+  const adminUid = sanitizeId(context.adminUid);
   if (restaurantId) safe.restaurantId = restaurantId;
   if (operation && DIAGNOSTIC_OPERATIONS.has(operation)) safe.operation = operation;
   if (actorUid) safe.actorUid = actorUid;
   if (orderId) safe.orderId = orderId;
   if (requestId) safe.requestId = requestId;
+  if (adminUid) safe.adminUid = adminUid;
   return safe;
 }
 
