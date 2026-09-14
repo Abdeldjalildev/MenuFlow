@@ -48,7 +48,8 @@ Deep-audit protections:
 - commercial state is separate from order/pricing data;
 - no payment provider was selected before policy definition;
 - no billing dependency was added;
-- premium state is derived from trusted lifecycle state rather than a UI flag.
+- premium state is derived from trusted lifecycle state rather than a UI flag;
+- commercial mutations and change requests now reject nonexistent restaurant IDs, preventing orphan commercial records.
 
 Residual runtime evidence required: unauthorized mutation denial, tenant isolation, lifecycle-to-entitlement correctness, duplicate request behavior and Auth claim refresh semantics where commercial access is eventually enforced.
 
@@ -92,6 +93,8 @@ Implemented the final closure contract covering:
 
 The gate deliberately does not deploy production, choose a payment provider, create payment credentials, or claim commercial launch.
 
+The Gate 14.5 test contract was strengthened during the final audit to verify the commercial mutation boundary and the existence check for target tenants.
+
 ## Cross-phase deep-audit result
 
 ### Security boundaries preserved
@@ -109,6 +112,7 @@ The gate deliberately does not deploy production, choose a payment provider, cre
 - Tenant namespace remains `restaurants/{restaurantId}/...`.
 - Onboarding uses an explicit `provisioning` lifecycle to avoid false Auth/Firestore atomicity.
 - Existing authorized identities are not silently overwritten.
+- Commercial state cannot be created for a nonexistent restaurant through the authoritative mutation/request paths.
 - No destructive migration was introduced.
 - No legacy tenant path was silently rewritten.
 
@@ -121,12 +125,19 @@ The gate deliberately does not deploy production, choose a payment provider, cre
 - No production deployment.
 - No claim of automated backup/restore or payment settlement.
 
+## Final audit finding
+
+One concrete data-integrity issue was identified in the Gate 14.3/14.4 commercial backend: the SuperAdmin commercial-state mutation and plan-change request paths validated the requested restaurant ID syntactically but could otherwise create commercial documents for a nonexistent tenant. This was fixed by adding a server-side `assertRestaurantExists()` boundary before both authoritative write paths. The Gate 14.5 static contract was strengthened to cover this protection.
+
+No additional critical Phase 14 defect was identified from the repository-level audit that justified speculative infrastructure, a broad refactor, or changes to the canonical order/security authorities.
+
 ## Known residual risks requiring runtime evidence, not speculative code changes
 
 1. Concurrent onboarding requests for the same Admin UID can race around the pre-transaction membership check; runtime/concurrency evidence is required before closure.
 2. Firebase Auth custom claims refresh semantics must be verified in a real Auth/emulator flow before relying on immediate client-visible commercial role changes.
 3. Commercial entitlements are currently a server contract, not a complete payment settlement system; provider selection and legal/billing policy remain future operator decisions.
 4. Usage limits are intentionally not enforced until authoritative usage definitions exist.
+5. Duplicate commercial change requests are intentionally treated as operational workflow behavior rather than silently deduplicated without an authoritative policy; runtime evidence should confirm acceptable behavior.
 
 These are explicitly documented verification boundaries, not reasons to add speculative infrastructure before evidence exists.
 
