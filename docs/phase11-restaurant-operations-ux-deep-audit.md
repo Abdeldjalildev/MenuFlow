@@ -1,10 +1,10 @@
 # Phase 11 — Restaurant Operations & UX Deep Audit
 
-## Audit status
+## Audit / implementation status
 
-**DEEP-AUDITED — PLANNED — NOT AUTHORIZED FOR IMPLEMENTATION**
+**AUTHORIZED — IN PROGRESS — GATES 11.1 AND 11.2 IMPLEMENTATION AUTHORIZED**
 
-Phase 11 is the next phase after Phase 10. This document is an implementation-ready audit and gate plan, not authorization to begin coding.
+Phase 11 is officially open. Gate 11.1 (Cart Persistence) and Gate 11.2 (Order UX & Feedback) are the only gates currently authorized for implementation in this work unit. Gates 11.3–11.5 remain planned and must not be started early.
 
 The governing Phase 11 scope is: Restaurant Operations & UX. It must consume the established Phase 8 security model, Phase 9 order authority/integrity model, and Phase 10 waiter workflow. It must not introduce a second order engine or payment gateway.
 
@@ -44,11 +44,15 @@ Make customer cart restoration safe and predictable across reloads/navigation wi
 9. Bound item count, quantity, note length, and serialized storage size.
 10. Treat storage as recoverable UX state only; the server remains authoritative at submission time.
 
-### Current risks to verify
+### Implementation contract
 
-- `MenuProvider` currently persists `restaurantId` and `currentTable` in localStorage for UX context.
-- The existing cart implementation must be inspected before introducing persistence; do not assume a defect merely because persistence is absent.
-- Any persisted cart must not become an alternate source of order pricing or tenant authorization.
+- Persist only `{ items: { [menuItemId]: quantity }, notes: { [menuItemId]: note } }`.
+- Storage key must include a version, restaurant ID, table context, and authenticated Firebase UID.
+- Cart state must not be restored until the authentication state is known; if no authenticated customer exists, no persisted customer cart is restored.
+- Restored IDs are validated against the active restaurant menu. Invalid IDs are dropped and never migrated to another context.
+- Quantity and note values are bounded before entering React state or storage.
+- Storage is best-effort: quota/security errors do not break ordering.
+- Successful canonical order submission clears the active persisted cart; recoverable submission failure leaves it intact.
 
 ### Security tests
 
@@ -57,6 +61,7 @@ Make customer cart restoration safe and predictable across reloads/navigation wi
 - Customer A cart must not restore for Customer B on the same device.
 - Tampered localStorage must not alter server tenant/pricing authority.
 - Unknown menu IDs must be rejected or discarded safely.
+- Persisted payload must not contain `price`, `total`, `unitPrice`, or other authoritative monetary fields.
 
 ## Gate 11.2 — Order UX & Feedback
 
@@ -77,9 +82,17 @@ Provide clear, accessible, multilingual feedback for the order lifecycle without
 9. Avoid exposing raw Firebase/internal error details when a user-safe message is available.
 10. Ensure feedback works on narrow/mobile layouts.
 
-### Required lifecycle contract
+### Implementation contract
 
-The UI reflects backend state. It must not locally manufacture `preparing`, `ready`, `paid`, `completed`, or other authoritative states.
+- Customer checkout and delivery submission use explicit UI state: `idle`, `submitting`, `success`, `validation-error`, `auth-error`, `network-error`, and `server-rejection`.
+- Canonical `createOrder` returns the server order number; the customer UI displays that value after success.
+- A stable mutation ID is sent for customer order creation so retries cannot intentionally create a second canonical order for the same submission.
+- Cart clearing occurs only after the canonical callable resolves successfully.
+- Recoverable failures leave cart and notes intact.
+- Checkout/delivery controls are disabled while submitting and expose `aria-busy`/disabled semantics.
+- Error presentation uses user-safe translated messages rather than raw Firebase exception text.
+- Feedback is exposed through an accessible live/status region and error focus is moved to the feedback region after a failed submission.
+- Existing `OrderTracking` remains the renderer of backend lifecycle state; no client-side lifecycle state machine is introduced.
 
 ### Tests
 
@@ -87,8 +100,10 @@ The UI reflects backend state. It must not locally manufacture `preparing`, `rea
 - Retry behavior after transport failure.
 - No premature cart clearing.
 - Multilingual string coverage.
-- RTL layout/semantic checks.
+- RTL semantic checks.
 - Accessibility checks for form controls, alerts, status regions, and keyboard navigation.
+- Canonical server order number is used in confirmation.
+- Duplicate customer submission uses a stable mutation ID per attempt.
 
 ## Gate 11.3 — Menu Modifiers
 
