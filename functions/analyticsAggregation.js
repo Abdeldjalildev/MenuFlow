@@ -84,8 +84,12 @@ function aggregateAnalytics({ orders = [], expenses = [], contract, startDate, e
 
 function toQueryBounds(startDate, endDate, timezone) {
   assertDateRange(startDate, endDate);
+  // Firestore receives a bounded UTC envelope one day wider at each edge. Exact
+  // restaurant-local inclusion is applied by aggregateAnalytics after conversion.
   const startUtc = new Date(`${startDate}T00:00:00.000Z`);
   const endUtc = new Date(`${endDate}T23:59:59.999Z`);
+  startUtc.setUTCDate(startUtc.getUTCDate() - 1);
+  endUtc.setUTCDate(endUtc.getUTCDate() + 1);
   if (Number.isNaN(startUtc.getTime()) || Number.isNaN(endUtc.getTime())) throw new HttpsError('invalid-argument', 'Unable to construct analytics query bounds.');
   return { startUtc, endUtc, timezone };
 }
