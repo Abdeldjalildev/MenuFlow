@@ -18,7 +18,9 @@ Required verification order:
 
 ## Phase 10 — Waiter Experience
 
-**OPEN — GATES 10.1 THROUGH 10.4 IMPLEMENTED — LOCAL VERIFICATION PENDING**
+**IMPLEMENTATION COMPLETE — AWAITING LOCAL TEST VERIFICATION — NOT CLOSED**
+
+All five gates have been implemented and deep-audited. Browser/runtime closure evidence remains intentionally local and must be confirmed before Phase 10 receives CLOSED status.
 
 ### Gate status
 
@@ -26,9 +28,28 @@ Required verification order:
 - Gate 10.2 — Waiter Menu: **IMPLEMENTED — VERIFICATION PENDING**
 - Gate 10.3 — Waiter Cart & Customer Order: **IMPLEMENTED — VERIFICATION PENDING**
 - Gate 10.4 — Kitchen Integration: **IMPLEMENTED — VERIFICATION PENDING**
-- Gate 10.5 — Waiter E2E Closure: **NOT STARTED**
+- Gate 10.5 — Waiter E2E Closure: **IMPLEMENTED — VERIFICATION PENDING**
+
+Required Phase 10 verification order:
+
+1. `npm run test:phase10:gate1`
+2. `npm run test:phase10:gate2`
+3. `npm run test:phase10:gate3`
+4. `npm run test:phase10:gate4`
+5. `npm run test:phase10:gate5`
+6. `npm run test:phase10:all`
+7. `npm test`
+8. Browser/runtime walkthrough: waiter login → table confirmation → menu → cart/notes → submit → server order number → Kitchen lifecycle → tenant isolation → Arabic/English/French.
 
 Phase 10 consumes Phase 9's server-authoritative order contracts. It must not create a parallel order engine or payment gateway.
+
+## Phase 11 — Restaurant Operations & UX
+
+**DEEP-AUDITED — PLANNED — NOT AUTHORIZED FOR IMPLEMENTATION**
+
+Phase 11 is the next approved roadmap phase. Its five gates and implementation risks are documented in `docs/phase11-restaurant-operations-ux-deep-audit.md`.
+
+No Phase 11 code has been implemented as part of the Phase 10 closure work.
 
 ## Operating rule
 
