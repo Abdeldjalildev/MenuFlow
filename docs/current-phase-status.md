@@ -16,7 +16,7 @@ All five gates have been implemented and deep-audited. Browser/runtime closure e
 
 **IMPLEMENTATION COMPLETE — AWAITING FINAL TEST/RUNTIME CONFIRMATION — NOT CLOSED**
 
-All five Phase 11 gates are implemented and the full phase has been deep-audited. A confirmed Gate 11.4 integration gap was found during the final audit: `order_transition` was defined but not emitted. It was fixed with a backend order-document update trigger using deterministic event IDs and failure-isolated notification creation.
+All five Phase 11 gates are implemented and the full phase has been deep-audited.
 
 ## Phase 12 — Analytics & Business Intelligence
 
@@ -32,13 +32,13 @@ All five gates are implemented and deep-audited; runtime/operator verification r
 
 ## Phase 14 — SaaS Commercialization & Launch Foundations
 
-**GATES 14.1–14.4 IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING — NOT CLOSED**
+**ALL FIVE GATES IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING — NOT CLOSED**
 
-Gates 14.1–14.4 were implemented without bypassing the Phase 13 verification prerequisite. Gate 14.5 remains planned and unauthorized.
+Gate 14.5 defines the final commercial-readiness closure contract. Phase 14 is implementation-complete and awaits only the required test/runtime/operator evidence; this status is intentionally not CLOSED until that evidence exists.
 
 ### Gate 14.1 — Production Environment & Deployment Contract
 
-**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
+**IMPLEMENTED — VERIFICATION PENDING**
 
 Production/test/local configuration contract, Node 20/us-central1 assumptions, secrets boundary, smoke-test contract and rollback contract are documented. No production deployment was executed.
 
@@ -46,7 +46,7 @@ Verification: `npm run test:phase14:gate1`
 
 ### Gate 14.2 — Restaurant Onboarding & Tenant Lifecycle
 
-**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
+**IMPLEMENTED — VERIFICATION PENDING**
 
 Canonical SuperAdmin-only restaurant creation, initial Admin provisioning, recoverable provisioning state, claim publication, active transition, compensating cleanup and onboarding audit are implemented.
 
@@ -54,7 +54,7 @@ Verification: `npm run test:phase14:gate2`
 
 ### Gate 14.3 — Plans, Entitlements & Billing Boundary
 
-**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
+**IMPLEMENTED — VERIFICATION PENDING**
 
 Server-authoritative `starter`/`growth` plan vocabulary, subscription lifecycle states, entitlement derivation, tenant-scoped commercial state, SuperAdmin-only state mutation and tenant-scoped plan-change requests are implemented. No payment provider was selected or integrated.
 
@@ -62,7 +62,7 @@ Verification: `npm run test:phase14:gate3`
 
 ### Gate 14.4 — Commercial UX, Limits & Operational Self-Service
 
-**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
+**IMPLEMENTED — VERIFICATION PENDING**
 
 Protected merchant commercial UI, server-derived plan/subscription/entitlement display, tenant-scoped plan-change requests and non-authoritative upgrade/downgrade entry points are implemented. Usage counters remain deferred until authoritative policies are defined.
 
@@ -70,7 +70,11 @@ Verification: `npm run test:phase14:gate4`
 
 ### Gate 14.5 — SaaS Launch & Commercial Readiness Closure
 
-**PLANNED — NOT AUTHORIZED**
+**IMPLEMENTED — VERIFICATION PENDING**
+
+Closure contract, regression boundaries, required runtime/operator evidence and accepted launch limitations are documented. No production launch is claimed.
+
+Verification: `npm run test:phase14:gate5`
 
 ### Phase 14 dependency order
 
