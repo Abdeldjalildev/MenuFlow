@@ -13,7 +13,7 @@ const wasteLog = read('src/components/merchant/pages/WasteLog.tsx');
 const qrCreations = read('src/components/merchant/pages/QrCreations.tsx');
 const expenses = read('src/components/merchant/pages/Expenses.tsx');
 
- test('Gate 13.1: canonical tenant collections are represented in the rules contract', () => {
+test('Gate 13.1: canonical tenant collections are represented in the rules contract', () => {
   for (const collectionName of [
     'settings', 'menuItems', 'categories', 'qrConfig', 'orders', 'notifications',
     'reviews', 'complaints', 'customers', 'staff', 'inventory', 'recipes',
@@ -57,6 +57,8 @@ test('Gate 13.1: canonical schema documentation and migration boundary are prese
   assert.match(gateDoc, /No production database rewrite/);
 });
 
-test('Gate 13.1: later Phase 13 gates remain outside this implementation', () => {
-  assert.match(gateDoc, /No implementation of Gates 13\.2–13\.5/);
+test('Gate 13.1: its own scope remains limited to data integrity and migration safety', () => {
+  assert.match(gateDoc, /Production Data Integrity & Schema Closure/);
+  assert.match(gateDoc, /No data migration is executed by Gate 13\.1/);
+  assert.match(gateDoc, /No production database rewrite/);
 });
