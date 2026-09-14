@@ -74,7 +74,7 @@ function buildAuthoritativeOrder(items, menuDataById) {
     const lineTotal = (unitPrice + modifierUnitTotal) * quantity;
     if (!Number.isFinite(lineTotal) || lineTotal < 0) throw new HttpsError('failed-precondition', 'Calculated order total is invalid.');
     subtotal += lineTotal;
-    return { menuItemId, ...(isNonEmptyString(menuData.recipeId) ? { recipeId: menuData.recipeId } : {}), name: menuData.name ?? menuData.nameAr ?? '', price: unitPrice, quantity, ...(modifiers.length ? { modifiers } : {}), ...(typeof item.note === 'string' ? { note: item.note.slice(0, 500) } : {}) };
+    return { menuItemId, ...(isNonEmptyString(menuData.recipeId) ? { recipeId: menuData.recipeId } : {}), name: menuData.name ?? menuData.nameAr ?? '', ...(isNonEmptyString(menuData.category) ? { category: menuData.category } : {}), price: unitPrice, quantity, ...(modifiers.length ? { modifiers } : {}), ...(typeof item.note === 'string' ? { note: item.note.slice(0, 500) } : {}) };
   });
   if (!Number.isFinite(subtotal) || subtotal < 0) throw new HttpsError('failed-precondition', 'Calculated order subtotal is invalid.');
   const discountAmount = 0;
