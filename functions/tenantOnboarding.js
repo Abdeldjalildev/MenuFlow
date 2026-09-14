@@ -5,6 +5,7 @@ const { logDiagnostic } = require('./operationalDiagnostics');
 
 const isNonEmptyString = value => typeof value === 'string' && value.trim().length > 0;
 const MAX_NAME_LENGTH = 160;
+const AUTH_ROLES = new Set(['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery', 'Waiter']);
 
 function normalizeRestaurantName(value) {
   if (!isNonEmptyString(value)) throw new HttpsError('invalid-argument', 'restaurantName is required.');
@@ -38,16 +39,25 @@ const createRestaurant = onCall(async request => {
   if (adminUid === caller.uid) throw new HttpsError('invalid-argument', 'The initial Admin must be a separate Firebase user.');
 
   const auth = getAuth();
+  let target;
   try {
-    const target = await auth.getUser(adminUid);
-    if (target.customClaims?.role === 'SuperAdmin') throw new HttpsError('failed-precondition', 'The initial Admin cannot already be a SuperAdmin.');
+    target = await auth.getUser(adminUid);
   } catch (error) {
-    if (error instanceof HttpsError) throw error;
     if (error?.code === 'auth/user-not-found') throw new HttpsError('not-found', 'The initial Admin Firebase user does not exist.');
     throw new HttpsError('internal', 'Unable to verify the initial Admin Firebase user.');
   }
 
+  const existingRole = target.customClaims?.role;
+  if (AUTH_ROLES.has(existingRole)) {
+    throw new HttpsError('failed-precondition', 'The initial Admin Firebase user already has an authorization role.');
+  }
+
   const db = getFirestore();
+  const existingMemberships = await db.collectionGroup('admins').where('adminUid', '==', adminUid).limit(1).get();
+  if (!existingMemberships.empty) {
+    throw new HttpsError('failed-precondition', 'The initial Admin Firebase user already has a restaurant membership.');
+  }
+
   const restaurantRef = db.collection('restaurants').doc();
   const membershipRef = restaurantRef.collection('admins').doc(adminUid);
   const createdAt = new Date();
