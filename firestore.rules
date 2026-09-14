@@ -5,7 +5,19 @@ service cloud.firestore {
     function role() { return signedIn() ? request.auth.token.get('role', null) : null; }
     function restaurantClaim() { return signedIn() ? request.auth.token.get('restaurantId', null) : null; }
     function isSuperAdmin() { return role() == 'SuperAdmin'; }
-    function isTenantRole(restaurantId, allowedRoles) { return signedIn() && restaurantClaim() == restaurantId && role() in allowedRoles; }
+    function hasAdminMembership(restaurantId) {
+      return signedIn()
+        && role() == 'Admin'
+        && exists(/databases/$(database)/documents/restaurants/$(restaurantId)/admins/$(request.auth.uid));
+    }
+    function isTenantRole(restaurantId, allowedRoles) {
+      return signedIn()
+        && role() in allowedRoles
+        && (
+          (role() == 'Admin' && hasAdminMembership(restaurantId))
+          || (role() != 'Admin' && restaurantClaim() == restaurantId)
+        );
+    }
     function isTenantAdmin(restaurantId) { return isTenantRole(restaurantId, ['Admin']); }
     function isTenantOperator(restaurantId) { return isTenantRole(restaurantId, ['Admin', 'Cashier', 'Kitchen', 'Delivery']); }
     function isAnonymousCustomer() { return signedIn() && request.auth.token.get('firebase', {}).get('sign_in_provider', '') == 'anonymous'; }
@@ -88,27 +100,22 @@ service cloud.firestore {
       match /waste_log/{entryId} { allow read, write: if isTenantOperator(restaurantId) || isSuperAdmin(); }
       match /wasteLog/{entryId} { allow read, write: if isTenantOperator(restaurantId) || isSuperAdmin(); }
       match /admins/{adminUid} {
-        // SuperAdmin can read all Admin memberships for a restaurant
         allow read: if isSuperAdmin();
-        // Admins can read their own membership record for this restaurant
         allow read: if signedIn() && role() == 'Admin' && adminUid == request.auth.uid;
-        // Only SuperAdmin can create membership records, with validated structure
         allow create: if isSuperAdmin()
           && request.resource.data.keys().hasAll(['adminUid', 'createdAt', 'createdBy'])
           && request.resource.data.keys().hasOnly(['adminUid', 'createdAt', 'createdBy'])
           && request.resource.data.adminUid == adminUid
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.createdAt is timestamp;
-        // Only SuperAdmin can delete membership records
         allow delete: if isSuperAdmin();
-        // Membership records are immutable after creation
         allow update: if false;
       }
       match /orderNumberCounters/{counterId} { allow read, write: if false; }
     }
     match /orders/{orderId} { allow read, write: if false; }
     match /reviews/{reviewId} { allow read, write: if false; }
-    match /complaints/{complaintId} { allow read, write: if false; }
+    match /complaints/{reviewId} { allow read, write: if false; }
     match /staff/{staffId} { allow read, write: if false; }
     match /customers/{customerId} { allow read, write: if false; }
     match /inventory/{inventoryId} { allow read, write: if false; }
