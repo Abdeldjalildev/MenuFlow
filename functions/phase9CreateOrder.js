@@ -4,7 +4,7 @@ const { mutateOrder } = require('./secureOrderMutations');
 const { createOperationalNotification } = require('./operationalNotifications');
 const { getAnalyticsSummary } = require('./phase12Analytics');
 const { createRestaurant } = require('./tenantOnboarding');
-const { getCommercialState, setCommercialState } = require('./tenantCommercialState');
+const { getCommercialState, setCommercialState, requestCommercialChange } = require('./tenantCommercialState');
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { getFirestore } = require('firebase-admin/firestore');
 
@@ -14,6 +14,7 @@ legacyFunctions.getAnalyticsSummary = getAnalyticsSummary;
 legacyFunctions.createRestaurant = createRestaurant;
 legacyFunctions.getCommercialState = getCommercialState;
 legacyFunctions.setCommercialState = setCommercialState;
+legacyFunctions.requestCommercialChange = requestCommercialChange;
 
 legacyFunctions.orderTransitionOperationalAlert = onDocumentUpdated(
   { document: 'restaurants/{restaurantId}/orders/{orderId}', region: 'us-central1' },
