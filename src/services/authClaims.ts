@@ -23,7 +23,7 @@ const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
 
 /**
- * Read authorization data only from Firebase's signed ID token claims.
+ * Read authentication identity only from Firebase's signed ID token claims.
  * Client storage may mirror these values for presentation, but it is never
  * accepted as an authorization source.
  */
@@ -39,44 +39,40 @@ export const getAuthzClaims = async (user: User): Promise<AuthzClaims | null> =>
 };
 
 /**
- * Get all restaurant memberships for an Admin actor.
- * Uses the getAdminMemberships callable function.
+ * Get all explicit restaurant memberships for the authenticated Admin actor.
+ * Uses the getAdminMemberships callable function, whose backend authorization
+ * derives the caller identity from Firebase Auth.
  */
 export const getAdminMemberships = async (): Promise<AdminMembership[]> => {
   const functions = getFunctions();
   const getMembershipsFn = httpsCallable(functions, 'getAdminMemberships');
-  
   const result = await getMembershipsFn({});
   const data = result.data as { memberships: AdminMembership[] };
-  
   return data?.memberships || [];
 };
 
 /**
- * Check if an Admin actor has membership in a specific restaurant.
- * Returns true if the Admin's primary restaurantId matches or if they have
- * an explicit AdminMembership record.
+ * Check whether the actor is authorized for a restaurant.
+ * SuperAdmin is platform-wide; Admin access is determined exclusively by
+ * explicit AdminMembership records; operational roles remain claim-scoped.
  */
 export const isAdminOfRestaurant = async (
-  _user: User,
+  user: User,
   claims: AuthzClaims,
   targetRestaurantId: RestaurantId
 ): Promise<boolean> => {
-  // SuperAdmin has implicit access to all restaurants
+  if (!isNonEmptyString(targetRestaurantId)) return false;
   if (claims.role === 'SuperAdmin') return true;
-  
-  // Non-Admin roles can only access their primary restaurant
+
   if (claims.role !== 'Admin') {
     return claims.restaurantId === targetRestaurantId;
   }
-  
-  // Admin's primary restaurant
-  if (claims.restaurantId === targetRestaurantId) return true;
-  
-  // Check AdminMembership for non-primary restaurant
+
   try {
     const memberships = await getAdminMemberships();
-    return memberships.some(m => m.restaurantId === targetRestaurantId);
+    return memberships.some(
+      membership => membership.adminUid === user.uid && membership.restaurantId === targetRestaurantId,
+    );
   } catch (error) {
     console.error('Failed to check Admin membership:', error);
     return false;
