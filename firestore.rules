@@ -86,7 +86,8 @@ service cloud.firestore {
       match /categories/{categoryId} { allow read: if true; allow write: if isTenantAdmin(restaurantId); }
       match /qrConfig/{configId} { allow read, write: if isTenantAdmin(restaurantId); }
       match /orders/{orderId} {
-        allow create: if isAnonymousCustomer() && validOrder(restaurantId);
+        // Phase 9 canonicalOrderCreation is the only supported browser-visible creation path.
+        allow create: if false;
         allow get, list: if isTenantOperator(restaurantId) || isSuperAdmin() || (isAnonymousCustomer() && resource.data.customerId == request.auth.uid);
         allow update: if isTenantOperator(restaurantId) && validOrderMutation(restaurantId);
         allow delete: if isTenantAdmin(restaurantId) || isSuperAdmin();
