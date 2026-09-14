@@ -1,17 +1,10 @@
 import { doc, getDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { db } from '../firebase';
 import type { RestaurantId } from '../types/firestore';
 
-/**
- * Canonical restaurant identity status.
- * Describes the state of a restaurant from the platform's perspective.
- */
 export type RestaurantStatus = 'active' | 'inactive' | 'suspended' | 'unknown';
 
-/**
- * Canonical restaurant identity record.
- * This is the authoritative restaurant context for the application.
- */
 export interface RestaurantIdentity {
   id: RestaurantId;
   name: string;
@@ -19,9 +12,6 @@ export interface RestaurantIdentity {
   exists: boolean;
 }
 
-/**
- * Result of resolving a restaurant identity from UX context.
- */
 export interface RestaurantResolutionResult {
   identity: RestaurantIdentity | null;
   source: 'url' | 'localStorage' | 'claims' | 'default' | 'none';
@@ -32,25 +22,13 @@ const DEFAULT_RESTAURANT_ID = 'default_restaurant';
 
 /**
  * Restaurant Identity Service
- * 
- * Provides canonical restaurant identity resolution for the MenuFlow platform.
- * 
- * DESIGN PRINCIPLES:
- * 1. URL parameters and localStorage carry UX/navigation context ONLY.
- * 2. They are NEVER used as security authority for private restaurant data.
- * 3. The canonical restaurant identity is resolved from Firestore (authoritative).
- * 4. Claims provide the authenticated actor's restaurant scope.
- * 5. Security decisions are made server-side using claims and rules.
- * 
- * FUTURE (Gate 8.4+):
- * - Waiter-selected restaurant context will use this service.
- * - QR ordering will use this service.
- * - The service will be extended with restaurant selection UI.
+ *
+ * URL parameters and localStorage are UX/navigation context only.
+ * They never grant authorization. For authenticated staff, the signed
+ * Firebase ID token is the trusted source of the actor's primary restaurant.
+ * Firestore remains authoritative for restaurant existence and status.
  */
 
-/**
- * Get restaurantId from URL parameters (UX context only).
- */
 export const getRestaurantIdFromUrl = (): string | null => {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -61,9 +39,6 @@ export const getRestaurantIdFromUrl = (): string | null => {
   }
 };
 
-/**
- * Get restaurantId from localStorage (UX context only).
- */
 export const getRestaurantIdFromStorage = (): string | null => {
   try {
     const restaurantId = localStorage.getItem('restaurantId');
@@ -73,10 +48,6 @@ export const getRestaurantIdFromStorage = (): string | null => {
   }
 };
 
-/**
- * Set restaurantId in localStorage (UX context only).
- * This is for navigation convenience only and does not grant authorization.
- */
 export const setRestaurantIdInStorage = (restaurantId: string): void => {
   try {
     localStorage.setItem('restaurantId', restaurantId);
@@ -86,29 +57,35 @@ export const setRestaurantIdInStorage = (restaurantId: string): void => {
 };
 
 /**
- * Resolve canonical restaurant identity from Firestore.
- * This is the authoritative source of restaurant existence and status.
- * 
- * @param restaurantId - The restaurant ID to resolve
- * @returns The canonical restaurant identity, or null if not found
+ * Read the authenticated actor's primary restaurant from the signed ID token.
+ * This is identity context, not a substitute for membership authorization.
  */
+export const getRestaurantIdFromClaims = async (): Promise<string | null> => {
+  try {
+    const user = getAuth().currentUser;
+    if (!user) return null;
+    const tokenResult = await user.getIdTokenResult();
+    const role = tokenResult.claims.role;
+    const restaurantId = tokenResult.claims.restaurantId;
+    if (typeof role !== 'string' || role === 'SuperAdmin') return null;
+    return typeof restaurantId === 'string' && restaurantId.trim().length > 0
+      ? restaurantId.trim()
+      : null;
+  } catch {
+    return null;
+  }
+};
+
 export const resolveRestaurantIdentity = async (
   restaurantId: string
 ): Promise<RestaurantIdentity | null> => {
-  if (!restaurantId || restaurantId.trim().length === 0) {
-    return null;
-  }
+  if (!restaurantId || restaurantId.trim().length === 0) return null;
 
   try {
     const restaurantSnap = await getDoc(doc(db, 'restaurants', restaurantId));
 
     if (!restaurantSnap.exists()) {
-      return {
-        id: restaurantId,
-        name: '',
-        status: 'unknown',
-        exists: false,
-      };
+      return { id: restaurantId, name: '', status: 'unknown', exists: false };
     }
 
     const data = restaurantSnap.data();
@@ -129,67 +106,44 @@ export const resolveRestaurantIdentity = async (
 };
 
 /**
- * Resolve restaurant identity from all available UX context sources.
- * Order of precedence:
- * 1. URL parameter (explicit navigation context)
- * 2. localStorage (persisted UX context)
- * 3. Default restaurant fallback
- * 
- * SECURITY NOTE: The returned restaurantId is UX context ONLY.
- * Server-side authorization (Firestore rules, callable functions) remains authoritative.
- * 
- * @returns The resolution result with identity and source information
+ * Resolve restaurant identity from UX context and trusted identity context.
+ * Explicit URL/storage context is preserved for navigation (for example an
+ * Admin selecting a secondary restaurant), while backend rules/functions
+ * remain authoritative for whether that actor may access the selected tenant.
  */
 export const resolveRestaurantFromContext = async (): Promise<RestaurantResolutionResult> => {
-  // 1. Try URL parameter
   const urlRestaurantId = getRestaurantIdFromUrl();
   if (urlRestaurantId) {
     const identity = await resolveRestaurantIdentity(urlRestaurantId);
     return {
-      identity: identity || {
-        id: urlRestaurantId,
-        name: '',
-        status: 'unknown',
-        exists: false,
-      },
+      identity: identity || { id: urlRestaurantId, name: '', status: 'unknown', exists: false },
       source: 'url',
     };
   }
 
-  // 2. Try localStorage
   const storageRestaurantId = getRestaurantIdFromStorage();
   if (storageRestaurantId) {
     const identity = await resolveRestaurantIdentity(storageRestaurantId);
     return {
-      identity: identity || {
-        id: storageRestaurantId,
-        name: '',
-        status: 'unknown',
-        exists: false,
-      },
+      identity: identity || { id: storageRestaurantId, name: '', status: 'unknown', exists: false },
       source: 'localStorage',
     };
   }
 
-  // 3. Default fallback
-  const defaultIdentity = await resolveRestaurantIdentity(DEFAULT_RESTAURANT_ID);
-  if (defaultIdentity) {
+  const claimsRestaurantId = await getRestaurantIdFromClaims();
+  if (claimsRestaurantId) {
+    const identity = await resolveRestaurantIdentity(claimsRestaurantId);
     return {
-      identity: defaultIdentity,
-      source: 'default',
+      identity: identity || { id: claimsRestaurantId, name: '', status: 'unknown', exists: false },
+      source: 'claims',
     };
   }
 
-  return {
-    identity: null,
-    source: 'none',
-  };
+  const defaultIdentity = await resolveRestaurantIdentity(DEFAULT_RESTAURANT_ID);
+  if (defaultIdentity) return { identity: defaultIdentity, source: 'default' };
+
+  return { identity: null, source: 'none' };
 };
 
-/**
- * Check if a restaurant is in a valid state for customer operations.
- * @param identity - The restaurant identity to check
- */
-export const isRestaurantAvailableForCustomers = (identity: RestaurantIdentity | null): boolean => {
-  return identity?.exists === true && identity.status === 'active';
-};
+export const isRestaurantAvailableForCustomers = (identity: RestaurantIdentity | null): boolean =>
+  identity?.exists === true && identity.status === 'active';
