@@ -6,7 +6,6 @@ const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'ut
 const waiter = read('src/pages/waiter/WaiterExperience.tsx');
 const provider = read('src/context/MenuProvider.tsx');
 const grid = read('src/components/customer/MenuGrid.tsx');
-const categories = read('src/components/customer/CategoryTabs.tsx');
 
 test('Gate 10.2: waiter reads the complete menu from the claimed tenant', () => {
   assert.match(waiter, /collection\(db, 'restaurants', restaurantId, 'menuItems'\)/);
@@ -30,9 +29,9 @@ test('Gate 10.2: Arabic, English and French are supported with RTL for Arabic', 
   assert.match(waiter, /dir=\{lang === 'ar' \? 'rtl' : 'ltr'\}/);
 });
 
-test('Gate 10.2: waiter menu displays authoritative catalog prices without creating a price authority', () => {
+test('Gate 10.2: waiter menu displays catalog prices without creating price authority', () => {
   assert.match(grid, /const originalPrice = Number\(item\.price \|\| 0\)/);
-  assert.match(waiter, /items = Object\.entries\(cart\).*menuItemId, quantity/s);
+  assert.match(waiter, /items = Object\.entries\(cart\)[\s\S]*menuItemId, quantity/);
   assert.doesNotMatch(waiter, /totalAmount:/);
   assert.doesNotMatch(waiter, /price: .*menuItems/);
 });
