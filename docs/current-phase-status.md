@@ -18,14 +18,14 @@ Required verification order:
 
 ## Phase 10 — Waiter Experience
 
-**OPEN — IMPLEMENTATION IN PROGRESS**
+**OPEN — GATES 10.1 THROUGH 10.4 IMPLEMENTED — LOCAL VERIFICATION PENDING**
 
 ### Gate status
 
 - Gate 10.1 — Waiter Role & Access: **IMPLEMENTED — VERIFICATION PENDING**
 - Gate 10.2 — Waiter Menu: **IMPLEMENTED — VERIFICATION PENDING**
-- Gate 10.3 — Waiter Cart & Customer Order: **NOT STARTED**
-- Gate 10.4 — Kitchen Integration: **NOT STARTED**
+- Gate 10.3 — Waiter Cart & Customer Order: **IMPLEMENTED — VERIFICATION PENDING**
+- Gate 10.4 — Kitchen Integration: **IMPLEMENTED — VERIFICATION PENDING**
 - Gate 10.5 — Waiter E2E Closure: **NOT STARTED**
 
 Phase 10 consumes Phase 9's server-authoritative order contracts. It must not create a parallel order engine or payment gateway.
