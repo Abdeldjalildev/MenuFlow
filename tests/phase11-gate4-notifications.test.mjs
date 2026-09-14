@@ -28,8 +28,10 @@ test('Gate 11.4: notification failure cannot corrupt the canonical lifecycle', (
   assert.match(writer, /Operational notification creation failed/);
 });
 
-test('Gate 11.4: no browser notification write rule is introduced', () => {
-  assert.doesNotMatch(rules, /match \/notifications\//);
+test('Gate 11.4: browser notifications are read-only and tenant-scoped', () => {
+  assert.match(rules, /match \/notifications\//);
+  assert.match(rules, /allow get, list: if isTenantOperator\(restaurantId\) \|\| isSuperAdmin\(\)/);
+  assert.match(rules, /allow create, update, delete: if false;/);
   assert.doesNotMatch(service, /setDoc\(/);
 });
 
