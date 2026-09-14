@@ -73,7 +73,7 @@ export const WaiterExperience: React.FC = () => {
   };
   const note = (id: string, value: string) => setNotes(prev => ({ ...prev, [id]: value.slice(0, 500) }));
   const setTable = (value: string) => { setTableNumber(value.slice(0, 32)); setConfirmedTable(null); setSuccess(null); setError(''); };
-  const validTable = /^[A-Za-z0-9\u0600-\u06FF][A-Za-z0-9\u0600-\u06FF _-]{0,31}$/.test(tableNumber.trim());
+  const validTable = /^[A-Za-z1-9\u0601-\u06FF][A-Za-z0-9\u0600-\u06FF _-]{0,31}$/.test(tableNumber.trim());
   const confirmCurrentTable = () => {
     if (!validTable) { setError(t.invalidTable); return; }
     setConfirmedTable(tableNumber.trim()); setError(''); setSuccess(null);
@@ -92,7 +92,6 @@ export const WaiterExperience: React.FC = () => {
       if (typeof data.orderNumber !== 'number') throw new Error(t.error);
       setSuccess(data.orderNumber); setCart({}); setNotes({}); setTableNumber(''); setConfirmedTable(null); setPendingMutationId(null);
     } catch (e) {
-      // Keep the mutation ID after a transport failure so a retry cannot create a duplicate order.
       setError(e instanceof Error ? e.message : t.error);
     } finally { setSubmitting(false); }
   };
