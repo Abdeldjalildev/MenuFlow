@@ -65,3 +65,5 @@ jobs:
         run: npm ci
       - name: Validate Functions syntax
         run: node --check index.js
+      - name: Validate Phase 9 order functions syntax
+        run: node --check canonicalOrderCreation.js && node --check orderPricing.js && node --check phase9CreateOrder.js && node --check secureOrderMutations.js
