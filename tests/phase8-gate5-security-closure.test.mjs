@@ -9,11 +9,6 @@ const authClaimsSource = await readFile(new URL('../src/services/authClaims.ts',
 const superAdminSource = await readFile(new URL('../src/components/Admin/SuperAdminDashboard.tsx', import.meta.url), 'utf8');
 const protectedRouteSource = await readFile(new URL('../src/routes/ProtectedRouteProps.tsx', import.meta.url), 'utf8');
 
-// ============================================================
-// Gate 8.5: Security Contract Closure
-// Verifies the authorization contracts established by 8.2-8.4
-// ============================================================
-
 test('Gate 8.5: SuperAdmin authorization is claims-based, not email-based', () => {
   assert.match(superAdminSource, /getAuthzClaims/);
   assert.match(superAdminSource, /checkSuperAdminClaims/);
@@ -111,8 +106,9 @@ test('Gate 8.5: AdminActor has memberships array', () => {
   assert.match(typesSource, /memberships: AdminMembership\[\]/);
 });
 
-test('Gate 8.5: AdminMembership interface exists', () => {
+test('Gate 8.5: AdminMembership includes restaurant identity', () => {
   assert.match(typesSource, /interface AdminMembership/);
+  assert.match(typesSource, /restaurantId: RestaurantId/);
   assert.match(typesSource, /adminUid: string/);
   assert.match(typesSource, /createdBy: string/);
 });
