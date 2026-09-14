@@ -32,6 +32,13 @@ test('Gate 14.5: regression scope preserves core application authorities', () =>
   assert.match(source, /existing role boundaries/);
 });
 
+test('Gate 14.5: commercial mutation and request paths validate tenant existence', () => {
+  const source = read('functions/tenantCommercialState.js');
+  assert.match(source, /assertRestaurantExists/);
+  assert.match(source, /await assertRestaurantExists\(db, restaurantId\)/);
+  assert.match(source, /Only SuperAdmin can change commercial state/);
+});
+
 test('Gate 14.5: required verification commands are documented', () => {
   const source = read('docs/phase14-gate5-commercial-readiness.md');
   for (const command of ['test:phase14:gate1', 'test:phase14:gate2', 'test:phase14:gate3', 'test:phase14:gate4', 'test:phase14:gate5', 'npm test']) {
