@@ -1,22 +1,30 @@
 # Current Phase Status
 
+## Phase 8 — Core Domain & Security Architecture
+
+**IMPLEMENTATION COMPLETE — DEEP-AUDITED — AWAITING LOCAL TEST/RUNTIME VERIFICATION — NOT CLOSED**
+
+All five gates were implemented and the cumulative 8–14 audit found no contradiction requiring reopening the closed Firebase discovery investigation. Membership-authoritative Admin authorization, trusted tenant identity and server-side order authority remain the intended boundaries.
+
+Verification/closure remains pending; static implementation does not constitute runtime PASS.
+
 ## Phase 9 — Order Integrity & Unified Ordering
 
-**IMPLEMENTATION COMPLETE — AWAITING LOCAL TEST VERIFICATION — NOT CLOSED**
+**IMPLEMENTATION COMPLETE — DEEP-AUDITED — AWAITING LOCAL TEST VERIFICATION — NOT CLOSED**
 
 All five gates have been implemented and audited. Runtime verification remains intentionally local and must be performed before Phase 9 receives CLOSED status.
 
 ## Phase 10 — Waiter Experience
 
-**IMPLEMENTATION COMPLETE — AWAITING LOCAL TEST VERIFICATION — NOT CLOSED**
+**IMPLEMENTATION COMPLETE — DEEP-AUDITED — AWAITING LOCAL TEST VERIFICATION — NOT CLOSED**
 
 All five gates have been implemented and deep-audited. Browser/runtime closure evidence remains intentionally local and must be confirmed before Phase 10 receives CLOSED status.
 
 ## Phase 11 — Restaurant Operations & UX
 
-**IMPLEMENTATION COMPLETE — AWAITING FINAL TEST/RUNTIME CONFIRMATION — NOT CLOSED**
+**IMPLEMENTATION COMPLETE — DEEP-AUDITED — AWAITING FINAL TEST/RUNTIME CONFIRMATION — NOT CLOSED**
 
-All five Phase 11 gates are implemented and the full phase has been deep-audited.
+All five Phase 11 gates are implemented and the cross-phase audit corrected the `required: true` modifier fallback so required modifiers cannot silently normalize to zero minimum selections.
 
 ## Phase 12 — Analytics & Business Intelligence
 
@@ -26,7 +34,7 @@ All five gates are implemented and deep-audited; runtime verification remains pe
 
 ## Phase 13 — Production Readiness, Reliability & Scale
 
-**IMPLEMENTATION COMPLETE — DEEP-AUDITED — AWAITING TEST/RUNTIME CONFIRMATION — NOT CLOSED**
+**IMPLEMENTATION COMPLETE — DEEP-AUDITED — AWAITING TEST/RUNTIME/OPERATOR CONFIRMATION — NOT CLOSED**
 
 All five gates are implemented and deep-audited; runtime/operator verification remains pending.
 
@@ -46,9 +54,9 @@ Verification: `npm run test:phase14:gate1`
 
 ### Gate 14.2 — Restaurant Onboarding & Tenant Lifecycle
 
-**IMPLEMENTED — VERIFICATION PENDING**
+**IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
 
-Canonical SuperAdmin-only restaurant creation, initial Admin provisioning, recoverable provisioning state, claim publication, active transition, compensating cleanup and onboarding audit are implemented.
+Canonical SuperAdmin-only restaurant creation, initial Admin provisioning, recoverable provisioning state, claim publication, active transition, compensating cleanup and onboarding audit are implemented. The final cross-phase audit now preserves unrelated Auth custom claims and attempts restoration if activation fails after claim publication.
 
 Verification: `npm run test:phase14:gate2`
 
@@ -56,7 +64,7 @@ Verification: `npm run test:phase14:gate2`
 
 **IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
 
-Server-authoritative `starter`/`growth` plan vocabulary, subscription lifecycle states, entitlement derivation, tenant-scoped commercial state, SuperAdmin-only state mutation and tenant-scoped plan-change requests are implemented. Final audit added a server-side restaurant-existence check before authoritative commercial writes. No payment provider was selected or integrated.
+Server-authoritative `starter`/`growth` plan vocabulary, subscription lifecycle states, entitlement derivation, tenant-scoped commercial state, SuperAdmin-only state mutation and tenant-scoped plan-change requests are implemented. Commercial reads/requests now require an existing active tenant, and authoritative writes reject nonexistent tenants. No payment provider was selected or integrated.
 
 Verification: `npm run test:phase14:gate3`
 
@@ -72,15 +80,25 @@ Verification: `npm run test:phase14:gate4`
 
 **IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
 
-Final closure contract and strengthened Gate 14.5 audit coverage are implemented. No production launch is claimed.
+Final closure contract and strengthened audit coverage are implemented. No production launch is claimed.
 
 Verification: `npm run test:phase14:gate5`
 
-### Phase 14 dependency order
+## Cross-phase 8–14 audit
+
+**COMPLETE — REPOSITORY-LEVEL CONSISTENCY REVIEW PERFORMED**
+
+The cumulative audit reviewed authorization, tenant identity, canonical order creation/mutation, pricing/modifiers, notifications, analytics, observability, resilience, onboarding and commercial boundaries. Corrections made by the audit are documented in `docs/phase14-saas-commercialization-deep-audit.md`.
+
+No broad refactor, dependency upgrade, speculative infrastructure, weakening of security, or reopening of the historical Firebase discovery investigation was introduced.
+
+## Dependency order
+
+Phase 8 → Phase 9 → Phase 10 → Phase 11 → Phase 12 → Phase 13 → Phase 14
+
+Phase 14 gate order:
 
 `14.1 → 14.2 → 14.3 → 14.4 → 14.5`
-
-Full plan/audit: `docs/phase14-saas-commercialization-deep-audit.md`
 
 ## Operating rule
 
