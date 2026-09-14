@@ -14,6 +14,11 @@ const assertTenantAccess = async (db, restaurantId, request) => {
   if (!membership.exists || membership.data()?.adminUid !== request.auth.uid) throw new HttpsError('permission-denied', 'Restaurant access is required.');
 };
 
+const assertRestaurantExists = async (db, restaurantId) => {
+  const restaurant = await db.doc(`restaurants/${restaurantId}`).get();
+  if (!restaurant.exists) throw new HttpsError('not-found', 'Restaurant does not exist.');
+};
+
 const getCommercialState = onCall(async request => {
   requireAdmin(request);
   const restaurantId = request.data?.restaurantId;
@@ -29,8 +34,10 @@ const setCommercialState = onCall(async request => {
   if (request.auth?.token?.role !== 'SuperAdmin') throw new HttpsError('permission-denied', 'Only SuperAdmin can change commercial state.');
   const { restaurantId, planId, state } = request.data || {};
   if (typeof restaurantId !== 'string' || !restaurantId.trim() || !getPlan(planId)) throw new HttpsError('invalid-argument', 'Valid restaurantId and planId are required.');
+  const db = getFirestore();
+  await assertRestaurantExists(db, restaurantId);
   const snapshot = buildEntitlementSnapshot({ planId, state });
-  await getFirestore().doc(`restaurants/${restaurantId}/commercial/subscription`).set({ planId, state, updatedAt: FieldValue.serverTimestamp(), entitlements: snapshot.entitlements }, { merge: true });
+  await db.doc(`restaurants/${restaurantId}/commercial/subscription`).set({ planId, state, updatedAt: FieldValue.serverTimestamp(), entitlements: snapshot.entitlements }, { merge: true });
   return { ok: true, ...snapshot };
 });
 
@@ -40,6 +47,7 @@ const requestCommercialChange = onCall(async request => {
   if (typeof restaurantId !== 'string' || !restaurantId.trim() || !getPlan(requestedPlanId)) throw new HttpsError('invalid-argument', 'Valid restaurantId and requestedPlanId are required.');
   const db = getFirestore();
   await assertTenantAccess(db, restaurantId, request);
+  await assertRestaurantExists(db, restaurantId);
   const requestRef = db.collection(`restaurants/${restaurantId}/commercial/changeRequests`).doc();
   await requestRef.create({ requestedPlanId, requestedBy: request.auth.uid, status: 'pending', createdAt: FieldValue.serverTimestamp() });
   return { ok: true, requestId: requestRef.id, status: 'pending' };
