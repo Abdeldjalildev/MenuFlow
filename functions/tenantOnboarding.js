@@ -19,16 +19,6 @@ function normalizeAdminUid(value) {
   return value.trim();
 }
 
-/**
- * Canonical tenant onboarding authority.
- *
- * The callable is intentionally SuperAdmin-only until a separate, audited
- * self-service onboarding policy exists. Restaurant creation, initial Admin
- * membership and the active lifecycle state are server-authoritative.
- * Firebase Auth claims cannot participate in a Firestore transaction, so the
- * flow uses a recoverable `provisioning` state and only marks the tenant
- * `active` after the Admin claim succeeds.
- */
 const createRestaurant = onCall(async request => {
   const caller = request.auth;
   if (!caller) throw new HttpsError('unauthenticated', 'Authentication is required.');
@@ -47,23 +37,16 @@ const createRestaurant = onCall(async request => {
     throw new HttpsError('internal', 'Unable to verify the initial Admin Firebase user.');
   }
 
-  const existingRole = target.customClaims?.role;
-  if (AUTH_ROLES.has(existingRole)) {
-    throw new HttpsError('failed-precondition', 'The initial Admin Firebase user already has an authorization role.');
-  }
+  const originalClaims = { ...(target.customClaims || {}) };
+  if (AUTH_ROLES.has(originalClaims.role)) throw new HttpsError('failed-precondition', 'The initial Admin Firebase user already has an authorization role.');
 
   const db = getFirestore();
   const existingMemberships = await db.collectionGroup('admins').where('adminUid', '==', adminUid).limit(1).get();
-  if (!existingMemberships.empty) {
-    throw new HttpsError('failed-precondition', 'The initial Admin Firebase user already has a restaurant membership.');
-  }
+  if (!existingMemberships.empty) throw new HttpsError('failed-precondition', 'The initial Admin Firebase user already has a restaurant membership.');
 
   const restaurantRef = db.collection('restaurants').doc();
   const membershipRef = restaurantRef.collection('admins').doc(adminUid);
   const createdAt = new Date();
-
-  // Phase 14 deliberately does not invent billing/plan semantics. The tenant
-  // gets only safe operational defaults required by the existing application.
   const restaurant = {
     name: restaurantName,
     lifecycleState: 'provisioning',
@@ -75,19 +58,12 @@ const createRestaurant = onCall(async request => {
 
   await db.runTransaction(async tx => {
     tx.create(restaurantRef, restaurant);
-    tx.create(membershipRef, {
-      adminUid,
-      createdAt,
-      createdBy: caller.uid,
-    });
+    tx.create(membershipRef, { adminUid, createdAt, createdBy: caller.uid });
   });
 
   try {
-    await auth.setCustomUserClaims(adminUid, { role: 'Admin', restaurantId: restaurantRef.id });
+    await auth.setCustomUserClaims(adminUid, { ...originalClaims, role: 'Admin', restaurantId: restaurantRef.id });
   } catch (error) {
-    // Claims are external to the Firestore transaction. Remove the tenant and
-    // membership when possible; if cleanup itself fails, the provisioning state
-    // remains non-active and therefore is not presented as a successful tenant.
     try {
       await db.runTransaction(async tx => {
         tx.delete(membershipRef);
@@ -102,18 +78,16 @@ const createRestaurant = onCall(async request => {
   try {
     await restaurantRef.update({ lifecycleState: 'active', updatedAt: new Date() });
   } catch (error) {
+    try {
+      await auth.setCustomUserClaims(adminUid, originalClaims);
+    } catch (restoreError) {
+      logDiagnostic('error', 'tenant_onboarding', restoreError, { restaurantId: restaurantRef.id, adminUid });
+    }
     logDiagnostic('error', 'tenant_onboarding', error, { restaurantId: restaurantRef.id, adminUid });
     throw new HttpsError('internal', 'Tenant was provisioned but could not be activated.');
   }
 
-  await db.collection('restaurant_onboarding_audit').add({
-    action: 'create',
-    restaurantId: restaurantRef.id,
-    adminUid,
-    actorUid: caller.uid,
-    createdAt: new Date(),
-  });
-
+  await db.collection('restaurant_onboarding_audit').add({ action: 'create', restaurantId: restaurantRef.id, adminUid, actorUid: caller.uid, createdAt: new Date() });
   return { ok: true, restaurantId: restaurantRef.id, adminUid, lifecycleState: 'active' };
 });
 
