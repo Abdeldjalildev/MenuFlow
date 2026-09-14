@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getOrderNumberDate, getNextOrderNumber } = require('./orderNumber');
 const { buildAuthoritativeOrder, isNonEmptyString } = require('./orderPricing');
+const { createOperationalNotification } = require('./operationalNotifications');
 
 const STAFF_ROLES = new Set(['Waiter', 'Admin', 'SuperAdmin']);
 
@@ -22,17 +23,11 @@ async function assertCreationActor(request, restaurantId, orderSource) {
   }
   return { waiterId: auth.uid, waiterName: auth.token?.name || auth.token?.email || undefined, actorUid: auth.uid };
 }
-
 function normalizeDeliveryData(deliveryData) {
   if (deliveryData == null) return null;
   if (typeof deliveryData !== 'object' || Array.isArray(deliveryData)) throw new HttpsError('invalid-argument', 'deliveryData must be an object or null.');
-  return {
-    name: typeof deliveryData.name === 'string' ? deliveryData.name.slice(0, 120) : undefined,
-    address: typeof deliveryData.address === 'string' ? deliveryData.address.slice(0, 500) : undefined,
-    phone: typeof deliveryData.phone === 'string' ? deliveryData.phone.slice(0, 40) : undefined,
-  };
+  return { name: typeof deliveryData.name === 'string' ? deliveryData.name.slice(0, 120) : undefined, address: typeof deliveryData.address === 'string' ? deliveryData.address.slice(0, 500) : undefined, phone: typeof deliveryData.phone === 'string' ? deliveryData.phone.slice(0, 40) : undefined };
 }
-
 function normalizeItems(items) {
   if (!Array.isArray(items) || items.length === 0 || items.length > 50) throw new HttpsError('invalid-argument', 'Order items must contain between 1 and 50 items.');
   return items.map(item => {
@@ -61,7 +56,6 @@ const createOrder = onCall(async request => {
   const receiptRef = mutationId ? db.doc(`restaurants/${restaurantId}/orderMutationReceipts/${mutationId}`) : null;
   const menuRefs = new Map();
   for (const item of items) if (!menuRefs.has(item.menuItemId)) menuRefs.set(item.menuItemId, db.doc(`restaurants/${restaurantId}/menuItems/${item.menuItemId}`));
-
   const orderRef = db.collection(`restaurants/${restaurantId}/orders`).doc();
   const orderNumberDate = getOrderNumberDate();
   const counterRef = db.doc(`restaurants/${restaurantId}/orderNumberCounters/${orderNumberDate}`);
@@ -75,11 +69,10 @@ const createOrder = onCall(async request => {
       if (receiptSnap.exists) {
         const receipt = receiptSnap.data() || {};
         if (receipt.actorUid !== actor.actorUid || receipt.orderSource !== orderSource) throw new HttpsError('failed-precondition', 'Mutation ID has already been used by another actor.');
-        result = { orderId: receipt.orderId, orderNumber: receipt.orderNumber, orderNumberDate: receipt.orderNumberDate, subtotal: receipt.subtotal, discountAmount: receipt.discountAmount, totalAmount: receipt.totalAmount };
+        result = { orderId: receipt.orderId, orderNumber: receipt.orderNumber, orderNumberDate: receipt.orderNumberDate, subtotal: receipt.subtotal, discountAmount: receipt.discountAmount, totalAmount: receipt.totalAmount, isReplay: true };
         return;
       }
     }
-
     const menuDataById = new Map();
     for (const [menuItemId, menuRef] of menuRefs) {
       const menuSnap = await tx.get(menuRef);
@@ -90,19 +83,24 @@ const createOrder = onCall(async request => {
     const counterSnap = await tx.get(counterRef);
     const orderNumber = getNextOrderNumber(counterSnap.exists ? counterSnap.data() : null);
     tx.set(counterRef, { nextNumber: orderNumber + 1, date: orderNumberDate, updatedAt: new Date() }, { merge: true });
-    const order = {
-      restaurantId, orderSource,
-      ...(actor.customerId ? { customerId: actor.customerId } : {}),
-      ...(actor.waiterId ? { waiterId: actor.waiterId, waiterName: actor.waiterName || null } : {}),
-      items: authoritative.items, tableNumber: tableNumber.trim(), status: 'pending', subtotal: authoritative.subtotal, discountAmount: authoritative.discountAmount, totalAmount: authoritative.totalAmount,
-      customerName: typeof deliveryData?.name === 'string' ? deliveryData.name : '', customerPhone: deliveryData?.phone || '', deliveryAddress: deliveryData?.address || '', deliveryData,
-      createdAt: new Date(), driverName: null, driverId: null, isClaimed: false, orderNumber, orderNumberDate,
-    };
+    const order = { restaurantId, orderSource, ...(actor.customerId ? { customerId: actor.customerId } : {}), ...(actor.waiterId ? { waiterId: actor.waiterId, waiterName: actor.waiterName || null } : {}), items: authoritative.items, tableNumber: tableNumber.trim(), status: 'pending', subtotal: authoritative.subtotal, discountAmount: authoritative.discountAmount, totalAmount: authoritative.totalAmount, customerName: typeof deliveryData?.name === 'string' ? deliveryData.name : '', customerPhone: deliveryData?.phone || '', deliveryAddress: deliveryData?.address || '', deliveryData, createdAt: new Date(), driverName: null, driverId: null, isClaimed: false, orderNumber, orderNumberDate };
     tx.create(orderRef, order);
     if (receiptRef) tx.create(receiptRef, { orderId: orderRef.id, orderNumber, orderNumberDate, subtotal: authoritative.subtotal, discountAmount: authoritative.discountAmount, totalAmount: authoritative.totalAmount, actorUid: actor.actorUid, orderSource, createdAt: new Date() });
-    result = { orderId: orderRef.id, orderNumber, order, subtotal: authoritative.subtotal, discountAmount: authoritative.discountAmount, totalAmount: authoritative.totalAmount };
+    result = { orderId: orderRef.id, orderNumber, order, subtotal: authoritative.subtotal, discountAmount: authoritative.discountAmount, totalAmount: authoritative.totalAmount, isReplay: false };
   });
 
+  if (!result.isReplay) {
+    await createOperationalNotification(db, {
+      restaurantId,
+      type: 'new_order',
+      orderId: result.orderId,
+      orderNumber: result.orderNumber,
+      status: 'pending',
+      title: 'New order',
+      message: `Order #${result.orderNumber} is ready for restaurant operations.`,
+      eventId: `new-order-${result.orderId}`,
+    });
+  }
   return { ok: true, orderId: result.orderId, orderNumber: result.orderNumber, orderNumberDate: result.orderNumberDate || orderNumberDate, subtotal: result.subtotal, discountAmount: result.discountAmount, totalAmount: result.totalAmount, orderSource };
 });
 
