@@ -1,161 +1,136 @@
-# Phase 14 — SaaS Commercialization & Launch Foundations Deep Audit
+# Cross-Phase 8–14 Deep Audit — MenuFlow
 
 ## Audit status
 
-**ALL FIVE GATES IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING — NOT CLOSED**
+**PHASES 8–14 IMPLEMENTATION REVIEW COMPLETE — CROSS-PHASE CONSISTENCY AUDITED — VERIFICATION PENDING**
 
-Phase 14 is implementation-complete. The final status remains intentionally open until static tests, full regression, runtime/emulator evidence, and the applicable production/operator evidence are confirmed.
+This repository-level audit reviewed the cumulative architecture introduced from Phase 8 through Phase 14, with emphasis on authorization authority, tenant identity, canonical order creation/mutation, pricing/modifiers, notifications, analytics, observability, resilience boundaries, onboarding, commercial state, and regression contracts.
 
-## Gate 14.1 — Production Environment & Deployment Contract
+## Phase 8 — Domain & Security Architecture
 
-Implemented the production/test/local contract, Node 20/us-central1 assumptions, secrets boundary, smoke-test contract and operator rollback contract. No production deployment was executed.
+- Membership is the authoritative Admin tenant boundary; stale `restaurantId` claims are not sufficient for Admin access.
+- Tenant-scoped non-Admin roles continue to depend on trusted claims.
+- Browser/localStorage identity is not treated as authorization authority.
+- Order authority remains server-side.
+- No closed Firebase discovery investigation was reopened.
 
-Audit result: no speculative deployment automation, no credential handling added, no dependency upgrade.
+Audit result: no repository-level contradiction requiring reopening Phase 8. Runtime closure evidence remains separate from implementation.
 
-## Gate 14.2 — Restaurant Onboarding & Tenant Lifecycle
+## Phase 9 — Order Integrity & Unified Ordering
 
-Implemented canonical SuperAdmin-only restaurant creation, initial Admin membership, recoverable provisioning state, claim publication, active transition after claim success, compensating cleanup and onboarding audit.
+- Customer and waiter creation converge on `canonicalOrderCreation.js`.
+- Server-side menu lookup and pricing remain authoritative.
+- Order numbering and idempotency remain transactional.
+- Secure order mutations remain behind `secureOrderMutations.js`.
+- `transitionOrder` remains the lifecycle authority; commercial/analytics work does not replace it.
 
-Deep-audit protections:
+Audit result: no second order engine or client-side pricing authority introduced by Phases 10–14.
 
-- existing authorized users are rejected before onboarding to avoid overwriting authorization claims or leaving stale memberships;
-- onboarding does not falsely claim Firestore/Auth atomicity;
-- lifecycle remains `provisioning` until claim publication succeeds;
-- canonical tenant namespace is preserved;
-- order engine was not rewritten.
+## Phase 10 — Waiter Experience
 
-Residual runtime evidence required: concurrent duplicate onboarding attempts, claim-failure recovery, collection-group membership behavior and cross-tenant denial.
+- Waiter access remains role/tenant protected.
+- Waiter ordering uses the canonical order callable.
+- The table `0` delivery sentinel remains rejected for waiter orders.
+- Kitchen continues to consume the same order lifecycle rather than a second state machine.
 
-## Gate 14.3 — Plans, Entitlements & Billing Boundary
+Audit result: no commercial or analytics feature bypasses the waiter/order authority boundary.
 
-**IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
+## Phase 11 — Restaurant Operations & UX
 
-Implemented:
+- Cart persistence stores IDs/quantities/notes rather than authoritative prices/totals.
+- Customer order UX clears cart only after confirmed server success.
+- Modifier pricing is catalog-authoritative.
+- Operational notifications are backend-created and client-read-only.
+- Order-transition notifications remain isolated from lifecycle mutation failures.
 
-- explicit `starter` and `growth` plan vocabulary;
-- explicit subscription states: `trialing`, `active`, `past_due`, `grace_period`, `canceled`, `suspended`;
-- server-derived entitlement snapshot;
-- tenant-scoped commercial state under `restaurants/{restaurantId}/commercial/subscription`;
-- Admin/SuperAdmin read boundary;
-- SuperAdmin-only authoritative commercial-state mutation;
-- tenant-scoped plan-change request boundary;
-- provider-neutral billing event vocabulary without adding a provider dependency.
+### Audit correction
 
-Deep-audit protections:
+The modifier contract previously allowed a modifier with `required: true` but no explicit `minSelections` to normalize to `minSelections = 0`. That contradicted the meaning of the `required` flag. The server normalization was corrected so `required: true` implies a minimum selection of one when `minSelections` is omitted, and the Gate 11.3 contract test now covers this boundary.
 
-- browser cannot grant itself entitlements;
-- plan-change requests do not mutate subscription state;
-- commercial state is separate from order/pricing data;
-- no payment provider was selected before policy definition;
-- no billing dependency was added;
-- premium state is derived from trusted lifecycle state rather than a UI flag;
-- commercial mutations and change requests now reject nonexistent restaurant IDs, preventing orphan commercial records.
+## Phase 12 — Analytics & Business Intelligence
 
-Residual runtime evidence required: unauthorized mutation denial, tenant isolation, lifecycle-to-entitlement correctness, duplicate request behavior and Auth claim refresh semantics where commercial access is eventually enforced.
+- Revenue remains based on completed orders and historical server snapshots.
+- Expenses are tenant-scoped and use the canonical expense namespace.
+- Analytics queries are bounded and fail closed at the configured source limit.
+- Dashboard consumption remains through the trusted analytics callable rather than raw operational collection reads.
+- Timezone conversion remains explicit.
 
-## Gate 14.4 — Commercial UX, Limits & Operational Self-Service
+Audit result: no cross-phase commercial feature became an analytics authority, and no analytics path became order authority.
 
-**IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
+## Phase 13 — Production Readiness, Reliability & Scale
 
-Implemented:
+- Observability uses a bounded diagnostic taxonomy rather than leaking request payloads/secrets.
+- Performance boundaries preserve Phase 6 frontend budgets and bounded analytics queries.
+- Resilience/recovery remains documented without speculative queues/caches.
+- Production/operator evidence is not falsely represented as repository verification.
 
-- protected merchant commercial route at `/merchant/commercial`;
-- server-derived plan/subscription/entitlement display;
-- tenant-scoped upgrade/downgrade request entry points;
-- server-created pending change requests;
-- no client-side entitlement mutation;
-- no sensitive provider/payment data in the UI;
-- no speculative usage counters.
+Audit result: no Phase 14 feature invalidated the Phase 13 production-readiness boundaries.
 
-Deep-audit protections:
+## Phase 14 — SaaS Commercialization & Launch Foundations
 
-- Admin/SuperAdmin route protection remains in force;
-- commercial state is read through a trusted callable rather than raw browser reads;
-- plan changes are requests only;
-- usage counters are deferred until authoritative usage and limit policies exist;
-- existing merchant localization/layout infrastructure is reused.
+### 14.1
+Production environment/deployment contract is documented; no production deployment or credential handling was introduced.
 
-Residual runtime evidence required: protected route behavior, server-derived state, request creation without entitlement mutation, tenant isolation and AR/EN/FR/RTL regression.
+### 14.2
+SuperAdmin-only tenant onboarding uses `provisioning → active`, initial Admin membership, claim publication and compensating cleanup.
 
-## Gate 14.5 — SaaS Launch & Commercial Readiness Closure
+### 14.3
+Commercial plan vocabulary and entitlement derivation are server-authoritative and provider-neutral.
 
-**IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
+### 14.4
+Commercial UI consumes server-derived state and creates plan-change requests only; it cannot grant entitlements.
 
-Implemented the final closure contract covering:
+### 14.5
+Launch-readiness closure explicitly requires runtime/operator evidence and does not claim commercial launch.
 
-- prior Gate 14.1–14.4 verification;
-- full regression preservation;
-- runtime/emulator security evidence;
-- production/operator prerequisites;
-- commercial authorization boundaries;
-- separation of commercial and operational data;
-- accepted limitations and explicit non-launch claims.
+### Audit corrections
 
-The gate deliberately does not deploy production, choose a payment provider, create payment credentials, or claim commercial launch.
+1. **Auth claim preservation:** onboarding previously replaced the entire target user's custom-claims object. The flow now preserves unrelated existing claims while replacing only the authorization fields required for the new Admin role. If activation fails after claim publication, the original claims are restored on a best-effort basis and the failure is diagnostically recorded.
+2. **Active-tenant commercial boundary:** commercial reads and plan-change requests now require the target restaurant to exist and have `lifecycleState === 'active'`. This prevents a partially provisioned tenant from entering the commercial workflow.
+3. **Nonexistent tenant protection:** authoritative commercial mutation/request paths reject nonexistent restaurant IDs before creating commercial documents.
 
-The Gate 14.5 test contract was strengthened during the final audit to verify the commercial mutation boundary and the existence check for target tenants.
+## Cross-phase authority map
 
-## Cross-phase deep-audit result
+| Domain | Single authority | Protected from |
+|---|---|---|
+| Tenant creation | `createRestaurant` | client/self-service bypass |
+| Admin membership | Firestore membership + backend provisioning | stale claims |
+| Non-Admin tenant identity | trusted Auth claim | URL/localStorage |
+| Order creation | `canonicalOrderCreation.js` | browser direct writes |
+| Pricing | `orderPricing.js` + tenant menu catalog | client price/total |
+| Order mutation | `secureOrderMutations.js` + lifecycle authority | arbitrary Firestore updates |
+| Notifications | backend notification writer | browser writes |
+| Analytics | `getAnalyticsSummary` + aggregation contract | raw client aggregation |
+| Commercial entitlements | `commercialEntitlements.js` | UI flags/client mutation |
+| Commercial state mutation | SuperAdmin callable | Admin/client mutation |
 
-### Security boundaries preserved
+## Contradiction check
 
-- SuperAdmin remains the authority for tenant creation and commercial-state mutation.
-- Admin access remains tenant-scoped.
-- Browser UI does not become an authorization source.
-- Entitlements are derived server-side.
-- Commercial data does not become order/pricing authority.
-- No payment secret/provider credential was introduced.
-- Existing canonical order creation and mutation authorities remain untouched.
+The audit found and corrected the concrete semantic/data-integrity inconsistencies listed above. No remaining repository-level contradiction was identified that justified changing the canonical order engine, reopening the historical Firebase discovery investigation, adding speculative infrastructure, weakening security rules, or performing a broad refactor.
 
-### Data-integrity boundaries preserved
+## Residual evidence boundaries
 
-- Tenant namespace remains `restaurants/{restaurantId}/...`.
-- Onboarding uses an explicit `provisioning` lifecycle to avoid false Auth/Firestore atomicity.
-- Existing authorized identities are not silently overwritten.
-- Commercial state cannot be created for a nonexistent restaurant through the authoritative mutation/request paths.
-- No destructive migration was introduced.
-- No legacy tenant path was silently rewritten.
+These are not declared PASS without runtime evidence:
 
-### Operational boundaries preserved
+1. concurrent onboarding attempts for the same Admin UID;
+2. Auth claim refresh behavior;
+3. Firestore cross-tenant enforcement in emulator/runtime;
+4. full Phase 8–14 regression;
+5. analytics timezone/boundary behavior;
+6. commercial tenant isolation and lifecycle enforcement;
+7. production/operator deployment and rollback evidence.
 
-- No speculative queue/cache infrastructure.
-- No billing dependency upgrade.
-- No second order engine.
-- No broad refactor.
-- No production deployment.
-- No claim of automated backup/restore or payment settlement.
+## Required principle
 
-## Final audit finding
+Implementation, verification, and closure remain separate states. This audit corrects repository-level defects found from the source; it does not convert static review into runtime PASS.
 
-One concrete data-integrity issue was identified in the Gate 14.3/14.4 commercial backend: the SuperAdmin commercial-state mutation and plan-change request paths validated the requested restaurant ID syntactically but could otherwise create commercial documents for a nonexistent tenant. This was fixed by adding a server-side `assertRestaurantExists()` boundary before both authoritative write paths. The Gate 14.5 static contract was strengthened to cover this protection.
+## Current phase closure state
 
-No additional critical Phase 14 defect was identified from the repository-level audit that justified speculative infrastructure, a broad refactor, or changes to the canonical order/security authorities.
-
-## Known residual risks requiring runtime evidence, not speculative code changes
-
-1. Concurrent onboarding requests for the same Admin UID can race around the pre-transaction membership check; runtime/concurrency evidence is required before closure.
-2. Firebase Auth custom claims refresh semantics must be verified in a real Auth/emulator flow before relying on immediate client-visible commercial role changes.
-3. Commercial entitlements are currently a server contract, not a complete payment settlement system; provider selection and legal/billing policy remain future operator decisions.
-4. Usage limits are intentionally not enforced until authoritative usage definitions exist.
-5. Duplicate commercial change requests are intentionally treated as operational workflow behavior rather than silently deduplicated without an authoritative policy; runtime evidence should confirm acceptable behavior.
-
-These are explicitly documented verification boundaries, not reasons to add speculative infrastructure before evidence exists.
-
-## Required verification before Phase 14 closure
-
-1. `npm run test:phase14:gate1`
-2. `npm run test:phase14:gate2`
-3. `npm run test:phase14:gate3`
-4. `npm run test:phase14:gate4`
-5. `npm run test:phase14:gate5`
-6. `npm test`
-7. Runtime/emulator evidence for tenant isolation, role boundaries, onboarding recovery, entitlement derivation and commercial request flows.
-8. Operator evidence required by Gate 14.1/14.5 before any real production launch.
-
-## Phase status
-
-**PHASE 14: IMPLEMENTATION COMPLETE — DEEP-AUDITED — AWAITING TEST/RUNTIME/OPERATOR CONFIRMATION — NOT CLOSED.**
-
-Dependency order remains:
-
-`14.1 → 14.2 → 14.3 → 14.4 → 14.5`
+- Phases 1–7: historical baseline CLOSED.
+- Phase 8: implemented/audited, verification/closure evidence pending.
+- Phase 9: implemented/audited, verification/closure evidence pending.
+- Phase 10: implemented/audited, verification/closure evidence pending.
+- Phase 11: implemented/audited, verification/closure evidence pending.
+- Phase 12: implemented/audited, verification/closure evidence pending.
+- Phase 13: implemented/audited, verification/runtime/operator evidence pending.
+- Phase 14: all five gates implemented/audited, verification/runtime/operator evidence pending.
