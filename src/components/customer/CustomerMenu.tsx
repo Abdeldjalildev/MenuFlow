@@ -17,7 +17,7 @@ import { auth, db } from '../../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
 interface ThemeConfig { logoUrl: string; primaryColor: string; secondaryColor: string; menuBgType: 'color' | 'image'; menuBgColor: string; menuBgImage: string; menuBgOpacity: number; menuBgBlur: number; menuBannerUrl: string }
-const DEFAULT_THEME: ThemeConfig = { logoUrl: '', primaryColor: '#4f46e5', secondaryColor: '#e0e7ff', menuBgType: 'color', menuBgColor: '', menuBgImage: '', menuBgOpacity: 100, menuBgBlur: 0, menuBgBannerUrl: '' };
+const DEFAULT_THEME: ThemeConfig = { logoUrl: '', primaryColor: '#4f46e5', secondaryColor: '#e0e7ff', menuBgType: 'color', menuBgColor: '', menuBgImage: '', menuBgOpacity: 100, menuBgBlur: 0, menuBannerUrl: '' };
 
 export const CustomerMenu: React.FC = () => {
   const { menuItems, themeColor, currentTable } = useMenu();
