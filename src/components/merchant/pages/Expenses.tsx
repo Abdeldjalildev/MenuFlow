@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../../firebase';
+import { db, auth } from '../../../firebase';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, query, where } from 'firebase/firestore';
 import { Plus, Trash2, Calendar, FileText } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { translations } from '../../../utils/translations/merchantTranslations';
+import { getAuthzClaims } from '../../../services/authClaims';
 
 type Language = 'ar' | 'fr' | 'en';
 
@@ -26,19 +27,35 @@ export const Expenses: React.FC<ExpensesProps> = (props) => {
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [restaurantId, setRestaurantId] = useState('');
   const [newExpense, setNewExpense] = useState({ title: '', amount: 0, category: t.categories.utilities, notes: '' });
 
   useEffect(() => {
-    const restaurantId = localStorage.getItem('restaurantId');
-    if (!restaurantId) return;
+    let cancelled = false;
+    const loadIdentity = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      try {
+        const claims = await getAuthzClaims(user);
+        if (!claims || !claims.restaurantId) return;
+        if (!cancelled) setRestaurantId(claims.restaurantId);
+      } catch (error) {
+        console.error('Failed to resolve tenant identity for expenses:', error);
+      }
+    };
+    void loadIdentity();
+    return () => { cancelled = true; };
+  }, []);
 
+  useEffect(() => {
+    if (!restaurantId) return;
     const localeMap: Record<Language, string> = { ar: 'ar-DZ', fr: 'fr-FR', en: 'en-US' };
-    const qExpenses = query(collection(db, 'expenses'), where('restaurantId', '==', restaurantId));
+    const qExpenses = query(collection(db, `restaurants/${restaurantId}/expenses`), where('restaurantId', '==', restaurantId));
 
     const unsubscribe = onSnapshot(qExpenses, (snapshot) => {
       const data = snapshot.docs.map(docSnap => {
         const docData = docSnap.data();
-        const dateObj = docData.createdAt?.toDate ? docData.createdAt.toDate() : new Date();
+        const dateObj = docData.expenseDate?.toDate ? docData.expenseDate.toDate() : docData.createdAt?.toDate ? docData.createdAt.toDate() : new Date();
 
         return {
           id: docSnap.id,
@@ -50,22 +67,17 @@ export const Expenses: React.FC<ExpensesProps> = (props) => {
     });
 
     return () => unsubscribe();
-  }, [lang]);
+  }, [lang, restaurantId]);
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newExpense.title || !newExpense.amount) return;
+    if (!newExpense.title || !newExpense.amount || !restaurantId) return;
 
-    const restaurantId = localStorage.getItem('restaurantId');
-    if (!restaurantId) {
-      alert('خطأ: لم يتم العثور على معرف المطعم.');
-      return;
-    }
-
-    await addDoc(collection(db, 'expenses'), {
+    await addDoc(collection(db, `restaurants/${restaurantId}/expenses`), {
       ...newExpense,
       amount: Number(newExpense.amount || 0),
       restaurantId,
+      expenseDate: serverTimestamp(),
       createdAt: serverTimestamp()
     });
 
@@ -76,7 +88,7 @@ export const Expenses: React.FC<ExpensesProps> = (props) => {
   const handleDeleteExpense = async (id: string) => {
     if (window.confirm(t.deleteConfirm)) {
       try {
-        await deleteDoc(doc(db, 'expenses', id));
+        await deleteDoc(doc(db, `restaurants/${restaurantId}/expenses`, id));
       } catch (error) {
         console.error('خطأ أثناء الحذف:', error);
       }
@@ -119,7 +131,7 @@ export const Expenses: React.FC<ExpensesProps> = (props) => {
             <h3 className="font-bold text-lg border-b pb-2 text-slate-800">{t.modalTitle}</h3>
             <div><label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalTitleLabel}</label><input type="text" required value={newExpense.title} onChange={(e) => setNewExpense({ ...newExpense, title: e.target.value })} placeholder={t.modalTitlePlaceholder} className="w-full p-2.5 border rounded-xl text-sm" /></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalAmountLabel}</label><input type="number" required value={newExpense.amount} onChange={(e) => setNewExpense({ ...newExpense, amount: Number(e.target.value) })} className="w-full p-2.5 border rounded-xl text-sm" placeholder="0" /></div>
+              <div><label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalAmountLabel}</label><input type="number" required min="0.01" value={newExpense.amount} onChange={(e) => setNewExpense({ ...newExpense, amount: Number(e.target.value) })} className="w-full p-2.5 border rounded-xl text-sm" placeholder="0" /></div>
               <div><label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalCategoryLabel}</label><select value={newExpense.category} onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })} className="w-full p-2.5 border rounded-xl text-sm"><option value={t.categories.utilities}>{t.categories.utilities}</option><option value={t.categories.rent}>{t.categories.rent}</option><option value={t.categories.maintenance}>{t.categories.maintenance}</option><option value={t.categories.urgentPurchases}>{t.categories.urgentPurchases}</option><option value={t.categories.salaries}>{t.categories.salaries}</option><option value={t.categories.other}>{t.categories.other}</option></select></div>
             </div>
             <div><label className="block text-xs font-semibold text-slate-500 mb-1">{t.modalNotesLabel}</label><textarea value={newExpense.notes} onChange={(e) => setNewExpense({ ...newExpense, notes: e.target.value })} placeholder={t.modalNotesPlaceholder} className="w-full p-2.5 border rounded-xl text-sm resize-none h-20" /></div>
