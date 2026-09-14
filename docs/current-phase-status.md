@@ -45,11 +45,35 @@ Phase 10 consumes Phase 9's server-authoritative order contracts. It must not cr
 
 ## Phase 11 — Restaurant Operations & UX
 
-**DEEP-AUDITED — PLANNED — NOT AUTHORIZED FOR IMPLEMENTATION**
+**AUTHORIZED — IN PROGRESS — GATES 11.1 AND 11.2 IMPLEMENTED, VERIFICATION PENDING**
 
-Phase 11 is the next approved roadmap phase. Its five gates and implementation risks are documented in `docs/phase11-restaurant-operations-ux-deep-audit.md`.
+Phase 11 was officially opened in GitHub Issue #27. The current authorized work unit is Gate 11.1 and Gate 11.2 only. Gates 11.3–11.5 remain planned and are not authorized.
 
-No Phase 11 code has been implemented as part of the Phase 10 closure work.
+### Gate status
+
+- Gate 11.1 — Cart Persistence: **IMPLEMENTED — VERIFICATION PENDING**
+- Gate 11.2 — Order UX & Feedback: **IMPLEMENTED — VERIFICATION PENDING**
+- Gate 11.3 — Menu Modifiers: **PLANNED — NOT AUTHORIZED**
+- Gate 11.4 — Notifications & Operational Alerts: **PLANNED — NOT AUTHORIZED**
+- Gate 11.5 — Operations Closure: **PLANNED — NOT AUTHORIZED**
+
+### Phase 11 Gate 11.1 verification
+
+1. `npm run test:phase11:gate1`
+2. Browser/reload walkthrough for restaurant/table/customer cart partitioning.
+
+### Phase 11 Gate 11.2 verification
+
+1. `npm run test:phase11:gate2`
+2. Browser/runtime walkthrough for success, retryable failure, server rejection, mobile layout, accessibility, and Arabic/English/French.
+
+### Combined Phase 11 verification for this work unit
+
+1. `npm run test:phase11:all`
+2. `npm test`
+3. Browser/runtime evidence as above.
+
+No Phase 11 gate is CLOSED based on static implementation alone.
 
 ## Operating rule
 
