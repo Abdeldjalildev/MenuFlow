@@ -33,6 +33,8 @@
     "test:phase9:gate2": "node --test tests/phase9-gate2-server-pricing.test.mjs",
     "test:phase9:gate3": "node --test tests/phase9-gate3-canonical-order-creation.test.mjs",
     "test:phase9:gate4": "node --test tests/phase9-gate4-order-mutation-security.test.mjs",
+    "test:phase9:gate5": "node --test tests/phase9-gate5-order-integrity.test.mjs",
+    "test:phase9:all": "npm run test:phase9:gate1 && npm run test:phase9:gate2 && npm run test:phase9:gate3 && npm run test:phase9:gate4 && npm run test:phase9:gate5",
     "perf:bundle-report": "node scripts/phase6-bundle-report.mjs",
     "perf:budget": "node scripts/phase6-performance-budget.mjs",
     "test:phase2:production": "node scripts/phase2-production-verification.mjs",
