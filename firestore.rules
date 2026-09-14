@@ -87,6 +87,23 @@ service cloud.firestore {
       match /recipes/{recipeId} { allow read, write: if isTenantRole(restaurantId, ['Admin','Kitchen']); }
       match /waste_log/{entryId} { allow read, write: if isTenantOperator(restaurantId) || isSuperAdmin(); }
       match /wasteLog/{entryId} { allow read, write: if isTenantOperator(restaurantId) || isSuperAdmin(); }
+      match /admins/{adminUid} {
+        // SuperAdmin can read all Admin memberships for a restaurant
+        allow read: if isSuperAdmin();
+        // Admins can read their own membership record for this restaurant
+        allow read: if signedIn() && role() == 'Admin' && adminUid == request.auth.uid;
+        // Only SuperAdmin can create membership records, with validated structure
+        allow create: if isSuperAdmin()
+          && request.resource.data.keys().hasAll(['adminUid', 'createdAt', 'createdBy'])
+          && request.resource.data.keys().hasOnly(['adminUid', 'createdAt', 'createdBy'])
+          && request.resource.data.adminUid == adminUid
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt is timestamp;
+        // Only SuperAdmin can delete membership records
+        allow delete: if isSuperAdmin();
+        // Membership records are immutable after creation
+        allow update: if false;
+      }
       match /orderNumberCounters/{counterId} { allow read, write: if false; }
     }
     match /orders/{orderId} { allow read, write: if false; }
@@ -99,6 +116,7 @@ service cloud.firestore {
     match /waste_log/{entryId} { allow read, write: if false; }
     match /wasteLog/{entryId} { allow read, write: if false; }
     match /authz_claim_audit/{entryId} { allow read, write: if false; }
+    match /admin_membership_audit/{entryId} { allow read, write: if false; }
     match /{document=**} { allow read, write: if false; }
   }
 }

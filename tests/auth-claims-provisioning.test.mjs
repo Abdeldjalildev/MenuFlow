@@ -16,7 +16,7 @@ test('claims provisioning uses Firebase Admin SDK rather than browser auth APIs'
 });
 
 test('tenant admins can provision only non-privileged staff roles', () => {
-  assert.match(source, /TENANT_STAFF_ROLES = new Set\(\['Cashier', 'Kitchen', 'Delivery'\]\)/);
+  assert.match(source, /TENANT_STAFF_ROLES = new Set\(\['Cashier', 'Kitchen', 'Delivery', 'Waiter'\]\)/);
   assert.match(source, /callerRole !== 'Admin' || !TENANT_STAFF_ROLES\.has\(role\)/);
   assert.doesNotMatch(source, /TENANT_STAFF_ROLES = new Set\(\['Admin'/);
 });

@@ -4,6 +4,7 @@ import { ensureAnonymousCustomer } from '../services/customerAuth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { addDoc, collection, doc, getDoc, onSnapshot, orderBy, query, runTransaction, serverTimestamp, where } from 'firebase/firestore';
 import { onAuthStateChanged, type User } from 'firebase/auth';
+import { STAFF_ROLES, type StaffRole } from '../types/firestore';
 
 export type OrderStatus = 'pending' | 'preparing' | 'driver_claimed' | 'ready' | 'ready_for_payment' | 'ready_for_delivery' | 'on_the_way' | 'delivered_unpaid' | 'paid' | 'completed' | 'TrackDone';
 interface FirestoreTimestamp { toDate(): Date; seconds: number; nanoseconds: number }
@@ -23,7 +24,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!authReady) return; let cancelled = false; let unsubscribe: (() => void) | undefined;
     const start = async () => { let currentUser = user; if (!currentUser) { try { currentUser = await ensureAnonymousCustomer(); } catch (error) { console.error('Unable to establish Firebase customer identity:', error); return; } } if (cancelled) return;
       if (currentUser.isAnonymous) { const customerOrders = query(collection(db, 'restaurants', restaurantId, 'orders'), where('customerId', '==', currentUser.uid), orderBy('createdAt', 'desc')); unsubscribe = onSnapshot(customerOrders, snapshot => { if (!cancelled) setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }) as Order)); }, error => console.error('Customer order listener failed:', error)); return; }
-      const token = await currentUser.getIdTokenResult(); const role = token.claims.role; const claimRestaurantId = typeof token.claims.restaurantId === 'string' ? token.claims.restaurantId : undefined; const targetRestaurant = claimRestaurantId || restaurantId; if (!['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery'].includes(String(role))) return;
+      const token = await currentUser.getIdTokenResult(); const role = token.claims.role; const claimRestaurantId = typeof token.claims.restaurantId === 'string' ? token.claims.restaurantId : undefined; const targetRestaurant = claimRestaurantId || restaurantId; if (!STAFF_ROLES.includes(String(role) as StaffRole)) return;
       const staffOrders = query(collection(db, 'restaurants', targetRestaurant, 'orders'), orderBy('createdAt', 'desc')); unsubscribe = onSnapshot(staffOrders, snapshot => { if (!cancelled) setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() }) as Order)); }, error => console.error('Staff order listener failed:', error));
     }; start(); return () => { cancelled = true; unsubscribe?.(); };
   }, [authReady, user, restaurantId]);

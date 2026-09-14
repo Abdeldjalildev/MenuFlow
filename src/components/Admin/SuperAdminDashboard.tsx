@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   AlertCircle,
   Ban,
@@ -17,6 +17,7 @@ import { collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firesto
 import { adminTranslations } from '../../utils/translations/AdminTranslations';
 import { AddRestaurantModal } from './AddRestaurantModal';
 import { auth, db } from '../../firebase';
+import { getAuthzClaims } from '../../services/authClaims';
 
 type Language = 'ar' | 'fr' | 'en';
 type DashboardTab = 'overview' | 'restaurants' | 'subscriptions' | 'settings';
@@ -33,7 +34,21 @@ interface RestaurantRecord {
   rawStatus: RestaurantStatus;
 }
 
-const SUPER_ADMIN_EMAIL = 'abdeldjalilkhalfa2@gmail.com';
+/**
+ * Check if the current user has SuperAdmin claims.
+ * Uses the canonical claims-based authorization system.
+ * Claims are established server-side and verified by Firebase Auth.
+ */
+const checkSuperAdminClaims = async (): Promise<boolean> => {
+  const user = auth.currentUser;
+  if (!user) return false;
+  try {
+    const claims = await getAuthzClaims(user);
+    return claims?.role === 'SuperAdmin';
+  } catch {
+    return false;
+  }
+};
 
 export const SuperAdminDashboard: React.FC = () => {
   const [lang, setLang] = useState<Language>('ar');
@@ -46,8 +61,14 @@ export const SuperAdminDashboard: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      const isSuperAdmin = user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setAuthorized(false);
+        setAuthReady(true);
+        navigate('/login', { replace: true });
+        return;
+      }
+      const isSuperAdmin = await checkSuperAdminClaims();
       setAuthorized(isSuperAdmin);
       setAuthReady(true);
 
@@ -59,11 +80,8 @@ export const SuperAdminDashboard: React.FC = () => {
     return unsubscribe;
   }, [navigate]);
 
-  const isCurrentSuperAdmin = () =>
-    auth.currentUser?.email?.toLowerCase() === SUPER_ADMIN_EMAIL;
-
-  const fetchRestaurants = async () => {
-    if (!isCurrentSuperAdmin()) return;
+  const fetchRestaurants = useCallback(async () => {
+    if (!authorized) return;
 
     setLoading(true);
     try {
@@ -96,60 +114,45 @@ export const SuperAdminDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [authorized]);
 
- useEffect(() => {
-  if (!authorized) return;
-
-  const loadRestaurants = async () => {
-    if (!isCurrentSuperAdmin()) return;
-
-    setLoading(true);
-
-    try {
-      const querySnapshot = await getDocs(collection(db, 'restaurants'));
-
-      const list: RestaurantRecord[] = querySnapshot.docs.map((docSnap) => {
-        const data = docSnap.data();
-        let planFormatted = data.plan as string | undefined;
-
-        if (data.plan === 'yearly') planFormatted = 'سنوي (1 Year)';
-        else if (data.plan === 'quarterly') planFormatted = '3 أشهر (Quarterly)';
-        else if (data.plan === 'monthly') planFormatted = 'شهري (Monthly)';
-
-        const rawStatus: RestaurantStatus =
-          data.status === 'suspended' ? 'suspended' : 'active';
-
-        return {
-          id: docSnap.id,
-          name: data.name,
-          owner: data.owner,
-          email: data.email,
-          plan: planFormatted || '',
-          status:
-            rawStatus === 'suspended'
-              ? 'معطل (Suspended)'
-              : 'نشط (Active)',
-          rawStatus,
-        };
-      });
-
-      setRestaurantsList(list);
-    } catch (error) {
-      console.error('Error fetching restaurants:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  void loadRestaurants();
-}, [authorized]);
+  useEffect(() => {
+    if (!authorized) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'restaurants'));
+        if (cancelled) return;
+        const list = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          const rawStatus: RestaurantStatus = data.status === 'suspended' ? 'suspended' : 'active';
+          const planFormatted = data.plan === 'monthly' ? 'Monthly' : data.plan === 'quarterly' ? 'Quarterly' : data.plan === 'yearly' ? 'Yearly' : '';
+          return {
+            id: docSnap.id,
+            name: data.name,
+            owner: data.owner,
+            email: data.email,
+            plan: planFormatted || '',
+            status: rawStatus === 'suspended' ? 'معطل (Suspended)' : 'نشط (Active)',
+            rawStatus,
+          };
+        });
+        setRestaurantsList(list);
+      } catch (error) {
+        console.error('Error fetching restaurants:', error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [authorized]);
 
   const handleToggleSuspend = async (
     restaurantId: string,
     currentRawStatus: RestaurantStatus
   ) => {
-    if (!isCurrentSuperAdmin()) {
+    if (!authorized) {
       navigate('/login', { replace: true });
       return;
     }
@@ -168,7 +171,7 @@ export const SuperAdminDashboard: React.FC = () => {
   };
 
   const handleDeleteRestaurant = async (restaurantId: string) => {
-    if (!isCurrentSuperAdmin()) {
+    if (!authorized) {
       navigate('/login', { replace: true });
       return;
     }

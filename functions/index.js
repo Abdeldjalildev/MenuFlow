@@ -8,8 +8,8 @@ const { generateGeminiResponse } = require('./aiProvider');
 
 initializeApp();
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
-const ALLOWED_ROLES = new Set(['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery']);
-const TENANT_STAFF_ROLES = new Set(['Cashier', 'Kitchen', 'Delivery']);
+const ALLOWED_ROLES = new Set(['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery', 'Waiter']);
+const TENANT_STAFF_ROLES = new Set(['Cashier', 'Kitchen', 'Delivery', 'Waiter']);
 const TRANSITIONS = { pending: new Set(['preparing']), preparing: new Set(['driver_claimed', 'ready_for_payment', 'ready']), driver_claimed: new Set(['ready_for_delivery']), ready: new Set(['ready_for_payment']), ready_for_payment: new Set(['ready_for_delivery', 'paid']), ready_for_delivery: new Set(['on_the_way']), on_the_way: new Set(['delivered_unpaid']), delivered_unpaid: new Set(['paid']), paid: new Set(['completed']), completed: new Set() };
 const ROLE_TRANSITIONS = { Admin: null, SuperAdmin: null, Kitchen: new Set(['pending:preparing', 'preparing:ready', 'preparing:ready_for_payment']), Cashier: new Set(['ready_for_payment:paid', 'delivered_unpaid:paid', 'ready_for_payment:completed', 'paid:completed']), Delivery: new Set(['preparing:driver_claimed', 'driver_claimed:ready_for_delivery', 'ready_for_delivery:on_the_way', 'on_the_way:delivered_unpaid']) };
 const isNonEmptyString = value => typeof value === 'string' && value.trim().length > 0;
@@ -25,8 +25,193 @@ exports.provisionAuthzClaims = onCall(async (request) => {
   if (callerRole !== 'SuperAdmin') { if (callerRole !== 'Admin' || !TENANT_STAFF_ROLES.has(role)) throw new HttpsError('permission-denied', 'Caller cannot provision this role.'); if (callerRestaurantId !== restaurantId) throw new HttpsError('permission-denied', 'Cross-tenant claim provisioning is forbidden.'); }
   let targetUser; try { targetUser = await getAuth().getUser(targetUid); } catch (error) { if (error?.code === 'auth/user-not-found') throw new HttpsError('not-found', 'Target Firebase user does not exist.'); throw new HttpsError('internal', 'Unable to verify the target Firebase user.'); }
   if (targetUser.customClaims?.role === 'SuperAdmin' && callerRole !== 'SuperAdmin') throw new HttpsError('permission-denied', 'Tenant administrators cannot modify SuperAdmin claims.');
-  await getAuth().setCustomUserClaims(targetUid, role === 'SuperAdmin' ? { role } : { role, restaurantId });
+  const claims = role === 'SuperAdmin' ? { role } : { role, restaurantId };
+  await getAuth().setCustomUserClaims(targetUid, claims);
+  
+  // For Admin role, create an AdminMembership record at restaurants/{restaurantId}/admins/{targetUid}
+  if (role === 'Admin' && isNonEmptyString(restaurantId)) {
+    try {
+      await getFirestore().doc(`restaurants/${restaurantId}/admins/${targetUid}`).set({
+        adminUid: targetUid,
+        createdAt: new Date(),
+        createdBy: request.auth.uid
+      });
+    } catch (error) {
+      // Log but don't fail the claim provisioning if membership creation fails
+      console.error('Failed to create AdminMembership record:', error);
+    }
+  }
+  
   await getFirestore().collection('authz_claim_audit').add({ targetUid, role, restaurantId: role === 'SuperAdmin' ? null : restaurantId, actorUid: request.auth.uid, actorRole: callerRole, createdAt: new Date() }); return { ok: true };
+});
+
+/**
+ * Check if an Admin actor has membership in a specific restaurant.
+ * Admins may manage multiple restaurants through explicit membership records
+ * stored at restaurants/{restaurantId}/admins/{adminUid}.
+ * 
+ * @param {string} adminUid - The Admin's Firebase UID
+ * @param {string} restaurantId - The restaurant to check membership for
+ * @param {object} callerToken - The caller's auth token (for authorization)
+ * @returns {Promise<boolean>} - True if the Admin has membership
+ */
+async function isAdminOfRestaurant(adminUid, restaurantId, callerToken) {
+  if (!isNonEmptyString(adminUid) || !isNonEmptyString(restaurantId)) return false;
+  
+  // SuperAdmin has implicit access to all restaurants
+  if (callerToken?.role === 'SuperAdmin') return true;
+  
+  // Check if the admin has a direct restaurantId claim for this restaurant
+  if (callerToken?.restaurantId === restaurantId) return true;
+  
+  // Check the AdminMembership subcollection
+  const membershipSnap = await getFirestore()
+    .doc(`restaurants/${restaurantId}/admins/${adminUid}`)
+    .get();
+  
+  return membershipSnap.exists;
+}
+
+/**
+ * Get all restaurant memberships for an Admin actor.
+ * SuperAdmin can query any Admin. Admins can only query themselves.
+ */
+exports.getAdminMemberships = onCall(async (request) => {
+  const caller = request.auth?.token;
+  if (!caller) throw new HttpsError('unauthenticated', 'Authentication is required.');
+  
+  const targetUid = request.data?.uid || request.auth.uid;
+  
+  // Only SuperAdmin can query other Admins' memberships
+  if (targetUid !== request.auth.uid && caller.role !== 'SuperAdmin') {
+    throw new HttpsError('permission-denied', 'Only SuperAdmin can query other Admins\' memberships.');
+  }
+  
+  if (caller.role !== 'SuperAdmin' && caller.role !== 'Admin') {
+    throw new HttpsError('permission-denied', 'Only Admin actors can have restaurant memberships.');
+  }
+  
+  const db = getFirestore();
+  const restaurantsSnap = await db.collection('restaurants').get();
+  
+  const memberships = [];
+  for (const restaurantDoc of restaurantsSnap.docs) {
+    const membershipSnap = await db.doc(`restaurants/${restaurantDoc.id}/admins/${targetUid}`).get();
+    if (membershipSnap.exists) {
+      memberships.push({
+        restaurantId: restaurantDoc.id,
+        restaurantName: restaurantDoc.data()?.name || 'Unknown',
+        ...membershipSnap.data()
+      });
+    }
+  }
+  
+  return { memberships };
+});
+
+/**
+ * Add an Admin membership - grants an Admin actor access to a restaurant.
+ * Only SuperAdmin can add memberships.
+ * Stores the membership at restaurants/{restaurantId}/admins/{adminUid}.
+ */
+exports.addAdminMembership = onCall(async (request) => {
+  const caller = request.auth?.token;
+  if (!caller) throw new HttpsError('unauthenticated', 'Authentication is required.');
+  
+  // Only SuperAdmin can add memberships
+  if (caller.role !== 'SuperAdmin') {
+    throw new HttpsError('permission-denied', 'Only SuperAdmin can add Admin memberships.');
+  }
+  
+  const { adminUid, restaurantId } = request.data || {};
+  if (!isNonEmptyString(adminUid) || !isNonEmptyString(restaurantId)) {
+    throw new HttpsError('invalid-argument', 'adminUid and restaurantId are required.');
+  }
+  
+  const db = getFirestore();
+  
+  // Verify the target user exists and has Admin role
+  let targetUser;
+  try {
+    targetUser = await getAuth().getUser(adminUid);
+  } catch (error) {
+    throw new HttpsError('not-found', 'Target Firebase user does not exist.');
+  }
+  
+  if (targetUser.customClaims?.role !== 'Admin') {
+    throw new HttpsError('failed-precondition', 'Target user is not an Admin.');
+  }
+  
+  // Verify the restaurant exists
+  const restaurantSnap = await db.doc(`restaurants/${restaurantId}`).get();
+  if (!restaurantSnap.exists) {
+    throw new HttpsError('not-found', 'Restaurant does not exist.');
+  }
+  
+  // Create the membership record
+  await db.doc(`restaurants/${restaurantId}/admins/${adminUid}`).set({
+    adminUid,
+    createdAt: new Date(),
+    createdBy: request.auth.uid
+  });
+  
+  // Audit log
+  await db.collection('admin_membership_audit').add({
+    action: 'add',
+    adminUid,
+    restaurantId,
+    actorUid: request.auth.uid,
+    createdAt: new Date()
+  });
+  
+  return { ok: true, restaurantId, adminUid };
+});
+
+/**
+ * Remove an Admin membership - revokes an Admin actor's access to a restaurant.
+ * Only SuperAdmin can remove memberships.
+ */
+exports.removeAdminMembership = onCall(async (request) => {
+  const caller = request.auth?.token;
+  if (!caller) throw new HttpsError('unauthenticated', 'Authentication is required.');
+  
+  // Only SuperAdmin can remove memberships
+  if (caller.role !== 'SuperAdmin') {
+    throw new HttpsError('permission-denied', 'Only SuperAdmin can remove Admin memberships.');
+  }
+  
+  const { adminUid, restaurantId } = request.data || {};
+  if (!isNonEmptyString(adminUid) || !isNonEmptyString(restaurantId)) {
+    throw new HttpsError('invalid-argument', 'adminUid and restaurantId are required.');
+  }
+  
+  const db = getFirestore();
+  
+  // Verify the target user exists and has Admin role
+  let targetUser;
+  try {
+    targetUser = await getAuth().getUser(adminUid);
+  } catch (error) {
+    throw new HttpsError('not-found', 'Target Firebase user does not exist.');
+  }
+  
+  if (targetUser.customClaims?.role !== 'Admin') {
+    throw new HttpsError('failed-precondition', 'Target user is not an Admin.');
+  }
+  
+  // Remove the membership record
+  await db.doc(`restaurants/${restaurantId}/admins/${adminUid}`).delete();
+  
+  // Audit log
+  await db.collection('admin_membership_audit').add({
+    action: 'remove',
+    adminUid,
+    restaurantId,
+    actorUid: request.auth.uid,
+    createdAt: new Date()
+  });
+  
+  return { ok: true, restaurantId, adminUid };
 });
 
 function assertTransition(role, from, to) { if (!TRANSITIONS[from]?.has(to)) throw new HttpsError('failed-precondition', `Illegal order transition: ${from} -> ${to}.`); if (role === 'Admin' || role === 'SuperAdmin') return; if (!ROLE_TRANSITIONS[role]?.has(`${from}:${to}`)) throw new HttpsError('permission-denied', `Role ${role} cannot perform ${from} -> ${to}.`); }
@@ -45,8 +230,26 @@ exports.createOrder = onCall(async (request) => {
 });
 
 exports.transitionOrder = onCall(async (request) => {
-  const auth = request.auth; if (!auth) throw new HttpsError('unauthenticated', 'Authentication is required.'); const role = auth.token?.role, restaurantId = auth.token?.restaurantId; if (!ALLOWED_ROLES.has(role)) throw new HttpsError('permission-denied', 'A staff authorization role is required.'); if (!isNonEmptyString(restaurantId) && role !== 'SuperAdmin') throw new HttpsError('permission-denied', 'Tenant authorization is required.');
-  const orderId = request.data?.orderId, newStatus = request.data?.newStatus; if (!isNonEmptyString(orderId) || !isNonEmptyString(newStatus)) throw new HttpsError('invalid-argument', 'orderId and newStatus are required.'); const db = getFirestore(); const effectiveRestaurant = role === 'SuperAdmin' ? request.data?.restaurantId : restaurantId; if (!isNonEmptyString(effectiveRestaurant)) throw new HttpsError('invalid-argument', 'restaurantId is required for SuperAdmin operations.'); const orderRef = db.doc(`restaurants/${effectiveRestaurant}/orders/${orderId}`);
+  const auth = request.auth; if (!auth) throw new HttpsError('unauthenticated', 'Authentication is required.'); const role = auth.token?.role, tokenRestaurantId = auth.token?.restaurantId; if (!ALLOWED_ROLES.has(role)) throw new HttpsError('permission-denied', 'A staff authorization role is required.'); if (!isNonEmptyString(tokenRestaurantId) && role !== 'SuperAdmin') throw new HttpsError('permission-denied', 'Tenant authorization is required.');
+  const orderId = request.data?.orderId, newStatus = request.data?.newStatus; if (!isNonEmptyString(orderId) || !isNonEmptyString(newStatus)) throw new HttpsError('invalid-argument', 'orderId and newStatus are required.'); const db = getFirestore();
+  // Determine effective restaurant based on role and membership
+  let effectiveRestaurant;
+  if (role === 'SuperAdmin') {
+    effectiveRestaurant = request.data?.restaurantId;
+  } else if (role === 'Admin') {
+    // Admin may access their primary restaurant or any restaurant they have membership in
+    const targetRestaurant = request.data?.restaurantId;
+    if (isNonEmptyString(targetRestaurant) && targetRestaurant !== tokenRestaurantId) {
+      // Check membership for non-primary restaurant
+      const hasMembership = await isAdminOfRestaurant(auth.uid, targetRestaurant, auth.token);
+      effectiveRestaurant = hasMembership ? targetRestaurant : tokenRestaurantId;
+    } else {
+      effectiveRestaurant = tokenRestaurantId;
+    }
+  } else {
+    effectiveRestaurant = tokenRestaurantId;
+  }
+  if (!isNonEmptyString(effectiveRestaurant)) throw new HttpsError('invalid-argument', 'restaurantId is required.'); const orderRef = db.doc(`restaurants/${effectiveRestaurant}/orders/${orderId}`);
   await db.runTransaction(async tx => { const orderSnap = await tx.get(orderRef); if (!orderSnap.exists) throw new HttpsError('not-found', 'Order not found.'); const order = orderSnap.data(); if (order.restaurantId !== effectiveRestaurant) throw new HttpsError('permission-denied', 'Tenant mismatch.'); const from = order.status; assertTransition(role, from, newStatus); const updates = { status: newStatus, updatedAt: new Date() }; if (newStatus === 'completed') updates.isPaid = true;
     if (newStatus === 'preparing' && !order.inventoryDeducted) { const deductions = new Map(); for (const item of Array.isArray(order.items) ? order.items : []) { const recipeId = item?.recipeId, qty = Number(item?.quantity ?? item?.qty ?? 1); if (!isNonEmptyString(recipeId)) throw new HttpsError('failed-precondition', 'Every order item must reference a recipe before preparation.'); if (!Number.isFinite(qty) || qty <= 0) throw new HttpsError('failed-precondition', 'Order item quantity is invalid.'); const recipeRef = db.doc(`restaurants/${effectiveRestaurant}/recipes/${recipeId}`), recipeSnap = await tx.get(recipeRef); if (!recipeSnap.exists) throw new HttpsError('failed-precondition', `Recipe ${recipeId} not found.`); const ingredients = Array.isArray(recipeSnap.data()?.recipeIngredients) ? recipeSnap.data().recipeIngredients : []; if (ingredients.length === 0) throw new HttpsError('failed-precondition', `Recipe ${recipeId} has no ingredients.`); for (const rawIngredient of ingredients) { const ingredient = normalizeIngredient(rawIngredient); if (!ingredient) throw new HttpsError('failed-precondition', `Recipe ${recipeId} has an invalid ingredient.`); deductions.set(ingredient.inventoryItemId, (deductions.get(ingredient.inventoryItemId) || 0) + ingredient.quantity * qty); } }
       const inventoryRefs = [...deductions.keys()].map(id => db.doc(`restaurants/${effectiveRestaurant}/inventory/${id}`)); const inventorySnaps = []; for (const ref of inventoryRefs) inventorySnaps.push(await tx.get(ref)); inventorySnaps.forEach((snap, index) => { if (!snap.exists) throw new HttpsError('failed-precondition', `Inventory item ${inventoryRefs[index].id} not found.`); const data = snap.data(), current = Number(data.currentQuantity ?? data.quantity ?? 0), required = deductions.get(inventoryRefs[index].id) || 0; if (!Number.isFinite(current) || current < required) throw new HttpsError('failed-precondition', `Insufficient stock for ${inventoryRefs[index].id}.`); }); inventorySnaps.forEach((snap, index) => { const ref = inventoryRefs[index], current = Number(snap.data().currentQuantity ?? snap.data().quantity ?? 0); const next = Number((current - (deductions.get(ref.id) || 0)).toFixed(4)); tx.update(ref, { currentQuantity: next, quantity: next, updatedAt: new Date() }); }); updates.inventoryDeducted = true; updates.inventoryDeductedAt = new Date(); }
@@ -55,7 +258,7 @@ exports.transitionOrder = onCall(async (request) => {
   return { ok: true, orderId, status: newStatus };
 });
 
-function assertAIAuthorization(request, restaurantId) {
+async function assertAIAuthorization(request, restaurantId) {
   const auth = request.auth;
   if (!auth) throw new HttpsError('unauthenticated', 'Authentication is required.');
   if (!isNonEmptyString(restaurantId)) throw new HttpsError('invalid-argument', 'restaurantId is required.');
@@ -65,7 +268,18 @@ function assertAIAuthorization(request, restaurantId) {
   if (signInProvider === 'anonymous') return;
 
   if (!ALLOWED_ROLES.has(role)) throw new HttpsError('permission-denied', 'A valid authorization role is required.');
-  if (role !== 'SuperAdmin' && auth.token?.restaurantId !== restaurantId) {
+  if (role === 'SuperAdmin') return;
+  
+  // For Admin role, check primary restaurant or membership
+  if (role === 'Admin') {
+    if (auth.token?.restaurantId === restaurantId) return;
+    // Check AdminMembership for non-primary restaurant
+    const hasMembership = await isAdminOfRestaurant(auth.uid, restaurantId, auth.token);
+    if (hasMembership) return;
+    throw new HttpsError('permission-denied', 'Cross-tenant AI access is forbidden.');
+  }
+  
+  if (auth.token?.restaurantId !== restaurantId) {
     throw new HttpsError('permission-denied', 'Cross-tenant AI access is forbidden.');
   }
 }

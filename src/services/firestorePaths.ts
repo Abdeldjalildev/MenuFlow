@@ -85,4 +85,9 @@ export const firestorePaths = {
     document: (restaurantId: RestaurantId, wasteLogId: string) =>
       `${restaurant(restaurantId)}/wasteLogs/${wasteLogId}`,
   },
+  admins: {
+    collection: (restaurantId: RestaurantId) => `${restaurant(restaurantId)}/admins`,
+    document: (restaurantId: RestaurantId, adminUid: string) =>
+      `${restaurant(restaurantId)}/admins/${adminUid}`,
+  },
 } as const;
