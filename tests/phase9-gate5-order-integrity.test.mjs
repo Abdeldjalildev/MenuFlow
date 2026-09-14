@@ -14,6 +14,12 @@ const wrapper = read('functions/phase9CreateOrder.js');
 const expectMatch = (source, pattern, message) => assert.match(source, pattern, message);
 const expectNotMatch = (source, pattern, message) => assert.doesNotMatch(source, pattern, message);
 
+const branch = (source, operation) => {
+  const start = source.indexOf(`if (operation === '${operation}')`);
+  const next = source.indexOf("if (operation === '", start + 1);
+  return source.slice(start, next === -1 ? source.length : next);
+};
+
 test('Gate 9.5: customer and waiter creation converge on one server authority', () => {
   expectMatch(creation, /const createOrder = onCall/);
   expectMatch(creation, /orderSource = request\.data\?\.orderSource \|\| 'customer'/);
@@ -59,10 +65,9 @@ test('Gate 9.5: mutation paths use backend authority rather than client Firestor
 });
 
 test('Gate 9.5: concurrent-sensitive mutations are transactionally guarded', () => {
-  expectMatch(mutations, /driver_claim[\s\S]*runTransaction/);
-  expectMatch(mutations, /driver_assign[\s\S]*runTransaction/);
-  expectMatch(mutations, /item_append[\s\S]*runTransaction/);
-  expectMatch(mutations, /payment_flag[\s\S]*runTransaction/);
+  for (const operation of ['driver_claim', 'driver_assign', 'item_append', 'payment_flag']) {
+    expectMatch(branch(mutations, operation), /runTransaction/, `${operation} must be transactional`);
+  }
 });
 
 test('Gate 9.5: duplicate append mutations are idempotency-protected', () => {
@@ -81,8 +86,9 @@ test('Gate 9.5: inventory integrity blocks append after inventory deduction', ()
 });
 
 test('Gate 9.5: driver identity cannot be forged during claim', () => {
-  expectMatch(mutations, /driverId: request\.auth\.uid/);
-  expectNotMatch(mutations, /driver_claim[\s\S]*request\.data\?\.driverId/);
+  const claim = branch(mutations, 'driver_claim');
+  expectMatch(claim, /driverId: request\.auth\.uid/);
+  expectNotMatch(claim, /request\.data\?\.driverId/);
 });
 
 test('Gate 9.5: payment and lifecycle invariants remain state-machine controlled', () => {
