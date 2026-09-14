@@ -19,7 +19,7 @@ function getModifierCatalog(menuData) {
   for (const modifier of raw) {
     if (!modifier || typeof modifier !== 'object' || !isNonEmptyString(modifier.id)) continue;
     if (catalog.has(modifier.id)) throw new HttpsError('failed-precondition', 'Menu item contains duplicate modifier IDs.');
-    const minSelections = Number.isInteger(modifier.minSelections) && modifier.minSelections >= 0 ? modifier.minSelections : 0;
+    const minSelections = Number.isInteger(modifier.minSelections) && modifier.minSelections >= 0 ? modifier.minSelections : (modifier.required === true ? 1 : 0);
     const maxSelections = Number.isInteger(modifier.maxSelections) && modifier.maxSelections > 0 ? modifier.maxSelections : 1;
     if (minSelections > maxSelections || maxSelections > 20) throw new HttpsError('failed-precondition', 'Menu modifier selection constraints are invalid.');
     catalog.set(modifier.id, { id: modifier.id, name: modifier.name, price: parsePrice(modifier.price ?? 0), groupId: isNonEmptyString(modifier.groupId) ? modifier.groupId : modifier.id, required: modifier.required === true || minSelections > 0, multiple: modifier.multiple === true, minSelections, maxSelections });
