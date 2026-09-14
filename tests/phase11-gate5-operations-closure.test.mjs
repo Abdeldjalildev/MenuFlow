@@ -9,12 +9,12 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 test('Gate 11.5: customer and waiter orders converge on canonical server creation', () => {
   const canonical = read('functions/canonicalOrderCreation.js');
   const waiter = read('src/pages/waiter/WaiterExperience.tsx');
-  const customer = read('src/providers/OrderProvider.tsx');
+  const customerOrder = read('src/context/OrderProvider.tsx');
   assert.match(canonical, /buildAuthoritativeOrder/);
   assert.match(canonical, /orderSource/);
-  assert.match(waiter, /createOrder/);
-  assert.match(waiter, /orderSource.*waiter|waiter.*orderSource/s);
-  assert.match(customer, /createOrder/);
+  assert.match(waiter, /httpsCallable\(functions, 'createOrder'\)/);
+  assert.match(waiter, /orderSource: 'waiter'/);
+  assert.match(customerOrder, /createOrder/);
 });
 
 test('Gate 11.5: lifecycle authority and operational transition alerts are single-path', () => {
@@ -39,14 +39,14 @@ test('Gate 11.5: tenant and authorization boundaries remain backend/rules author
   assert.match(notifications, /restaurants\/\$\{restaurantId\}\/notifications/);
 });
 
-test('Gate 11.5: Phase 11 UX contracts remain multilingual, accessible, and recoverable', () => {
-  const ux = read('src/pages/customer/CustomerMenu.tsx');
-  const checkout = read('src/components/customer/CheckoutBar.tsx');
-  const delivery = read('src/components/customer/DeliveryForm.tsx');
+test('Gate 11.5: UX contracts remain multilingual, accessible, and recoverable', () => {
+  const waiter = read('src/pages/waiter/WaiterExperience.tsx');
   const cart = read('src/context/CartContext.tsx');
-  assert.match(ux, /aria-live|aria-busy/);
-  assert.match(checkout, /disabled/);
-  assert.match(delivery, /aria-|error/i);
+  assert.match(waiter, /ar:|en:|fr:/);
+  assert.match(waiter, /dir=\{lang === 'ar' \? 'rtl' : 'ltr'\}/);
+  assert.match(waiter, /role="alert"/);
+  assert.match(waiter, /role="status"/);
+  assert.match(waiter, /disabled=\{!confirmedTable \|\| count === 0 \|\| submitting\}/);
   assert.match(cart, /localStorage/);
   assert.match(cart, /restaurant|table|customer/i);
 });
