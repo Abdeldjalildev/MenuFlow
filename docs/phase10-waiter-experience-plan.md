@@ -2,9 +2,11 @@
 
 ## Status
 
-**OPEN — GATES 10.1 THROUGH 10.4 IMPLEMENTED — LOCAL VERIFICATION PENDING**
+**IMPLEMENTATION COMPLETE — AWAITING LOCAL TEST VERIFICATION — NOT CLOSED**
 
-Phase 9 remains **IMPLEMENTATION COMPLETE — AWAITING LOCAL TEST VERIFICATION — NOT CLOSED**. Phase 10 is authorized and opened for implementation; its work consumes the Phase 9 contracts and does not declare Phase 9 runtime closure.
+All five Phase 10 gates have now been implemented and deep-audited. Runtime/browser verification remains intentionally local and must be performed before Phase 10 receives CLOSED status.
+
+Phase 9 remains **IMPLEMENTATION COMPLETE — AWAITING LOCAL TEST VERIFICATION — NOT CLOSED**. Phase 10 consumes the Phase 9 contracts and does not declare Phase 9 runtime closure.
 
 ## Gate 10.1 — Waiter Role & Access
 
@@ -21,7 +23,7 @@ Implemented:
 - waiter staff access is limited to the waiter's own staff record;
 - no URL or localStorage value is used as waiter authorization authority.
 
-Acceptance contract is captured in `tests/phase10-gate1-waiter-access.test.mjs`.
+Acceptance contract: `tests/phase10-gate1-waiter-access.test.mjs`.
 
 ## Gate 10.2 — Waiter Menu
 
@@ -35,10 +37,10 @@ Implemented:
 - Arabic uses RTL presentation;
 - menu prices are display-only; waiter submission sends menu item IDs, quantities, and notes rather than client totals/prices;
 - empty menu state is explicit;
-- the old demo/default menu fallback was removed from `MenuProvider` so missing database menu data cannot silently become fake production menu data;
+- demo/default menu fallback was removed from `MenuProvider`;
 - waiter submission uses the Phase 9 canonical `createOrder` callable with `orderSource: 'waiter'`.
 
-Acceptance contract is captured in `tests/phase10-gate2-waiter-menu.test.mjs`.
+Acceptance contract: `tests/phase10-gate2-waiter-menu.test.mjs`.
 
 ## Gate 10.3 — Waiter Cart & Customer Order
 
@@ -48,36 +50,55 @@ Implemented:
 
 - bounded and validated table entry;
 - explicit table confirmation before submission, with a clear change-table path;
-- cart count and empty-cart validation before submission;
+- cart count and empty-cart validation;
 - per-item customer notes remain bounded and travel through the canonical order boundary;
 - waiter submits menu item IDs and quantities only; server pricing remains authoritative;
 - server result is validated before clearing the cart;
-- stable waiter mutation IDs survive transport/application failures so retrying the same submission is idempotent rather than creating a duplicate order;
-- canonical backend identity and tenant authorization remain authoritative.
+- stable waiter mutation IDs survive transport/application failures so retrying the same submission is idempotent;
+- canonical backend identity and tenant authorization remain authoritative;
+- the waiter UI and canonical backend reject the reserved `0` table sentinel so a waiter cannot accidentally create a delivery order.
 
-Acceptance contract is captured in `tests/phase10-gate3-waiter-cart-order.test.mjs`.
+Acceptance contract: `tests/phase10-gate3-waiter-cart-order.test.mjs`.
 
 ## Gate 10.4 — Kitchen Integration
 
 **Status: IMPLEMENTATION COMPLETE — VERIFICATION PENDING**
 
-Implemented/verified by source contract:
+Implemented:
 
 - waiter-created orders are persisted with `status: pending` and `orderSource: waiter`;
 - the existing tenant-scoped `OrderProvider` order stream feeds the Kitchen dashboard;
-- Kitchen consumes waiter orders through the same existing order collection and context as other orders;
-- `pending` → `preparing` → ready-state transitions continue through the existing `transitionOrder` authority;
-- table orders use `ready_for_payment`, while delivery orders use `ready_for_delivery`, matching the existing kitchen lifecycle;
+- Kitchen consumes waiter orders through the same existing order collection/context as other orders;
+- `pending` → `preparing` → ready-state transitions continue through `transitionOrder` authority;
+- table orders use `ready_for_payment`, while delivery orders use `ready_for_delivery`;
 - completed and paid orders remain excluded from the active kitchen queue;
 - no waiter-specific or parallel order state machine was introduced.
 
-Acceptance contract is captured in `tests/phase10-gate4-kitchen-integration.test.mjs`.
+Acceptance contract: `tests/phase10-gate4-kitchen-integration.test.mjs`.
 
 ## Gate 10.5 — Waiter E2E Closure
 
-**Status: PLANNED — NOT STARTED**
+**Status: IMPLEMENTATION COMPLETE — VERIFICATION PENDING**
 
-Closure requires browser/runtime evidence for the complete waiter workflow, targeted security tests, multilingual verification, and regression verification. Static checks alone are insufficient.
+Implemented closure barrier covering:
+
+- waiter login and protected-route reachability;
+- trusted waiter tenant identity and cross-tenant protection;
+- table selection/confirmation and reserved delivery sentinel protection;
+- menu → cart → notes → canonical create-order submission;
+- server-authoritative pricing, order numbering, actor identity, and mutation idempotency;
+- waiter order entry into the existing Kitchen lifecycle;
+- Arabic/English/French UI and Arabic RTL;
+- direct browser order creation remaining disabled;
+- inclusion of all preceding Phase 10 gate contracts in the closure barrier.
+
+Acceptance contract: `tests/phase10-gate5-waiter-e2e-closure.test.mjs`.
+
+**Important:** this gate deliberately does not claim browser/runtime PASS. The local verification environment must execute the Phase 10 suite and the required regression suite.
+
+## Deep-audit correction applied during Phase 10 closure preparation
+
+A waiter table value of `0` was a semantic collision with the application's existing delivery-order sentinel (`tableNumber === '0'`). The UI now rejects it, and the canonical backend independently rejects `orderSource: waiter` with table `0`. This is defense-in-depth: the UI improves correctness, while the server remains authoritative.
 
 ## Phase 10 scope boundary
 
