@@ -19,7 +19,7 @@ service cloud.firestore {
         );
     }
     function isTenantAdmin(restaurantId) { return isTenantRole(restaurantId, ['Admin']); }
-    function isTenantOperator(restaurantId) { return isTenantRole(restaurantId, ['Admin', 'Cashier', 'Kitchen', 'Delivery']); }
+    function isTenantOperator(restaurantId) { return isTenantRole(restaurantId, ['Admin', 'Cashier', 'Kitchen', 'Delivery', 'Waiter']); }
     function isAnonymousCustomer() { return signedIn() && request.auth.token.get('firebase', {}).get('sign_in_provider', '') == 'anonymous'; }
     function validTimestampFields(data) { return (!data.keys().hasAny(['createdAt']) || data.createdAt is timestamp) && (!data.keys().hasAny(['updatedAt']) || data.updatedAt is timestamp); }
     function validOptionalString(data, field, maxLength) { return !data.keys().hasAny([field]) || (data.get(field, '') is string && data.get(field, '').size() <= maxLength); }
@@ -95,7 +95,7 @@ service cloud.firestore {
       match /reviews/{reviewId} { allow create: if isAnonymousCustomer() && validReview(restaurantId); allow get, list: if isTenantOperator(restaurantId) || isSuperAdmin(); allow update, delete: if isTenantAdmin(restaurantId) || isSuperAdmin(); }
       match /complaints/{complaintId} { allow create: if isAnonymousCustomer() && validComplaint(restaurantId); allow get, list: if isTenantOperator(restaurantId) || isSuperAdmin(); allow update, delete: if isTenantAdmin(restaurantId) || isSuperAdmin(); }
       match /customers/{customerId} { allow get: if (isAnonymousCustomer() && customerId == request.auth.uid && resource.data.restaurantId == restaurantId) || isTenantRole(restaurantId, ['Admin','Cashier']); allow list: if isTenantRole(restaurantId, ['Admin','Cashier']); allow create, update: if isTenantRole(restaurantId, ['Admin','Cashier']); allow delete: if isTenantAdmin(restaurantId); }
-      match /staff/{staffId} { allow read: if isTenantOperator(restaurantId) || isSuperAdmin(); allow write: if isTenantAdmin(restaurantId) || isSuperAdmin(); }
+      match /staff/{staffId} { allow get: if isTenantAdmin(restaurantId) || isSuperAdmin() || (isTenantRole(restaurantId, ['Cashier','Kitchen','Delivery']) && resource.data.uid == request.auth.uid) || (isTenantRole(restaurantId, ['Waiter']) && resource.data.uid == request.auth.uid); allow list: if isTenantAdmin(restaurantId) || isSuperAdmin(); allow write: if isTenantAdmin(restaurantId) || isSuperAdmin(); }
       match /inventory/{inventoryId} { allow read, write: if isTenantRole(restaurantId, ['Admin','Kitchen']); }
       match /recipes/{recipeId} { allow read, write: if isTenantRole(restaurantId, ['Admin','Kitchen']); }
       match /waste_log/{entryId} { allow read, write: if isTenantOperator(restaurantId) || isSuperAdmin(); }
