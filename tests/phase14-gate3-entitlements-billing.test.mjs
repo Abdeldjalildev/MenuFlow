@@ -23,6 +23,12 @@ test('Gate 14.3: client cannot directly change commercial state', () => {
   assert.match(source, /restaurants\/\$\{restaurantId\}\/commercial\/subscription/);
 });
 
+test('Gate 14.3: commercial access requires an existing active tenant', () => {
+  const source = read('functions/tenantCommercialState.js');
+  assert.match(source, /assertRestaurantActive/);
+  assert.match(source, /lifecycleState !== 'active'/);
+});
+
 test('Gate 14.3: billing provider is intentionally not selected', () => {
   const source = read('functions/commercialEntitlements.js');
   assert.doesNotMatch(source, /stripe|paypal|lemonsqueezy|paddle/i);
