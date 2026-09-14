@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore } = require('firebase-admin/firestore');
+const { logDiagnostic } = require('./operationalDiagnostics');
 
 const isNonEmptyString = value => typeof value === 'string' && value.trim().length > 0;
 const MAX_NAME_LENGTH = 160;
@@ -83,7 +84,7 @@ const createRestaurant = onCall(async request => {
         tx.delete(restaurantRef);
       });
     } catch (cleanupError) {
-      console.error('Tenant onboarding cleanup failed after Admin claim failure:', cleanupError);
+      logDiagnostic('error', 'tenant_onboarding', cleanupError, { restaurantId: restaurantRef.id, adminUid });
     }
     throw new HttpsError('internal', 'Unable to provision the initial Admin authorization.');
   }
@@ -91,6 +92,7 @@ const createRestaurant = onCall(async request => {
   try {
     await restaurantRef.update({ lifecycleState: 'active', updatedAt: new Date() });
   } catch (error) {
+    logDiagnostic('error', 'tenant_onboarding', error, { restaurantId: restaurantRef.id, adminUid });
     throw new HttpsError('internal', 'Tenant was provisioned but could not be activated.');
   }
 
