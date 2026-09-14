@@ -2,7 +2,7 @@ import React, { createContext, useEffect, useState } from 'react';
 import { auth, db } from '../firebase';
 import { ensureAnonymousCustomer } from '../services/customerAuth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { addDoc, collection, doc, getDoc, onSnapshot, orderBy, query, runTransaction, serverTimestamp, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, onSnapshot, orderBy, query, serverTimestamp, where } from 'firebase/firestore';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { STAFF_ROLES, type StaffRole } from '../types/firestore';
 import { normalizeOrderItem, normalizeOrderStatus, calculateOrderTotal, type CanonicalOrderStatus, type CanonicalOrderItem } from '../services/orderDomain';
@@ -26,6 +26,11 @@ const normalizeSnapshotOrder = (id: string, raw: Record<string, unknown>): Order
   totalAmount: Number(raw.totalAmount ?? raw.totalPrice ?? 0),
 });
 
+const newMutationId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+};
+
 export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [orders, setOrders] = useState<Order[]>([]); const [user, setUser] = useState<User | null>(auth.currentUser); const [authReady, setAuthReady] = useState(false); const restaurantId = getRestaurantId();
   useEffect(() => onAuthStateChanged(auth, next => { setUser(next); setAuthReady(true); }), []);
@@ -37,20 +42,31 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const staffOrders = query(collection(db, 'restaurants', targetRestaurant, 'orders'), orderBy('createdAt', 'desc')); unsubscribe = onSnapshot(staffOrders, snapshot => { if (!cancelled) setOrders(snapshot.docs.map(d => normalizeSnapshotOrder(d.id, d.data()))); }, error => console.error('Staff order listener failed:', error));
     }; start(); return () => { cancelled = true; unsubscribe?.(); };
   }, [authReady, user, restaurantId]);
-  const placeOrder = async (items: OrderItem[], tableNumber: string, deliveryData?: DeliveryData | null, totalAmount?: number, extraOptions?: PlaceOrderExtraOptions) => {
+  const placeOrder = async (items: OrderItem[], tableNumber: string, deliveryData?: DeliveryData | null, _totalAmount?: number, extraOptions?: PlaceOrderExtraOptions) => {
     if (!items?.length) return;
     await ensureAnonymousCustomer();
     const targetRestaurant = extraOptions?.restaurantId || restaurantId;
     const canonicalItems = items.map(item => normalizeOrderItem(item as Record<string, unknown>));
-    const canonicalTotal = calculateOrderTotal(canonicalItems);
-    // Phase 9.1 canonicalizes the client domain. Phase 9.2 will make pricing server-authoritative.
-    const requestedTotal = totalAmount == null ? canonicalTotal : Number(totalAmount);
+    // Phase 9.2/9.3: the server is authoritative for menu prices, modifiers, totals, tenant identity, and order numbering.
     const createOrder = httpsCallable(getFunctions(), 'createOrder');
-    await createOrder({ restaurantId: targetRestaurant, items: canonicalItems, tableNumber: tableNumber || '0', deliveryData: deliveryData || null, totalAmount: requestedTotal });
+    await createOrder({ restaurantId: targetRestaurant, items: canonicalItems, tableNumber: tableNumber || '0', deliveryData: deliveryData || null, orderSource: 'customer' });
   };
-  const appendToOrder = async (orderId: string, newItems: OrderItem[]) => { const ref = doc(db, 'restaurants', restaurantId, 'orders', orderId); await runTransaction(db, async tx => { const snap = await tx.get(ref); if (!snap.exists()) throw new Error('Order not found'); const data = normalizeSnapshotOrder(snap.id, snap.data()); const appended: OrderItem[] = newItems.map(item => ({ ...normalizeOrderItem(item as Record<string, unknown>), isAppended: true })); const total = Number(data.totalAmount || 0) + calculateOrderTotal(appended as CanonicalOrderItem[]); tx.update(ref, { items: [...data.items, ...appended], totalAmount: total, updatedAt: serverTimestamp() }); }); };
+  const appendToOrder = async (orderId: string, newItems: OrderItem[]) => {
+    if (!Array.isArray(newItems) || newItems.length === 0) throw new Error('New order items are required');
+    const mutateOrder = httpsCallable(getFunctions(), 'mutateOrder');
+    const canonicalItems = newItems.map(item => normalizeOrderItem(item as Record<string, unknown>));
+    await mutateOrder({ operation: 'item_append', restaurantId, orderId, mutationId: newMutationId(), items: canonicalItems });
+  };
   const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => { const transitionOrder = httpsCallable(getFunctions(), 'transitionOrder'); await transitionOrder({ orderId, newStatus, restaurantId }); };
-  const claimOrderForDriver = async (orderId: string, driverId: string, driverName: string) => { try { const ref = doc(db, 'restaurants', restaurantId, 'orders', orderId); const result = await runTransaction(db, async tx => { const snap = await tx.get(ref); if (!snap.exists()) return { success: false, message: 'Order not found' }; const data = normalizeSnapshotOrder(snap.id, snap.data()); if (data.isClaimed && data.driverId && data.driverId !== driverId) return { success: false, message: 'Order already claimed by another driver' }; if (data.isClaimed && data.driverId === driverId) return { success: true, message: 'Order already claimed by this driver' }; tx.update(ref, { isClaimed: true, driverId, driverName, status: data.status === 'preparing' ? 'driver_claimed' : data.status, updatedAt: serverTimestamp() }); return { success: true }; }); return result; } catch (error) { return { success: false, error }; } };
+  const claimOrderForDriver = async (orderId: string, _driverId: string, _driverName: string) => {
+    try {
+      const mutateOrder = httpsCallable(getFunctions(), 'mutateOrder');
+      await mutateOrder({ operation: 'driver_claim', restaurantId, orderId });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error };
+    }
+  };
   const addReview = async (orderId: string, rating: number, comment: string) => { const currentUser = auth.currentUser; if (!currentUser?.isAnonymous) throw new Error('Customer authentication required'); if (rating < 1 || rating > 5) throw new Error('Rating must be between 1 and 5'); const orderRef = doc(db, 'restaurants', restaurantId, 'orders', orderId); const orderSnap = await getDoc(orderRef); if (!orderSnap.exists() || (orderSnap.data() as Order).customerId !== currentUser.uid) throw new Error('Order ownership verification failed'); await addDoc(collection(db, 'restaurants', restaurantId, 'reviews'), { restaurantId, orderId, rating, comment: comment.slice(0, 1000), createdAt: serverTimestamp() }); };
   const value = { orders, placeOrder, appendToOrder, updateOrderStatus, addReview, claimOrderForDriver };
   return <OrderContext.Provider value={value}>{children}</OrderContext.Provider>;
