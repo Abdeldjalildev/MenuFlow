@@ -26,22 +26,7 @@ async function loadOrder(request, allowedRoles) {
   await authorizeRestaurantActor(request, restaurantId, allowedRoles);
   const db = getFirestore();
   const ref = db.doc(`restaurants/${restaurantId}/orders/${orderId}`);
-  return { db, ref, restaurantId, orderId };
-}
-
-async function buildAuthoritativeAppend(db, restaurantId, currentItems, appendedItems) {
-  if (!Array.isArray(appendedItems) || appendedItems.length === 0 || appendedItems.length > 50) throw new HttpsError('invalid-argument', 'Appended items must contain between 1 and 50 items.');
-  const combined = [...(Array.isArray(currentItems) ? currentItems : []), ...appendedItems];
-  if (combined.length > 50) throw new HttpsError('invalid-argument', 'An order cannot contain more than 50 items.');
-  const menuIds = new Set(combined.map(item => item?.menuItemId).filter(isNonEmptyString));
-  if (menuIds.size !== combined.length) throw new HttpsError('invalid-argument', 'Every order item requires menuItemId.');
-  const menuDataById = new Map();
-  for (const menuItemId of menuIds) {
-    const snap = await db.doc(`restaurants/${restaurantId}/menuItems/${menuItemId}`).get();
-    if (!snap.exists) throw new HttpsError('not-found', `Menu item ${menuItemId} does not exist in this restaurant.`);
-    menuDataById.set(menuItemId, { ...(snap.data() || {}), __restaurantId: restaurantId });
-  }
-  return buildAuthoritativeOrder(combined, menuDataById);
+  return { db, ref, restaurantId };
 }
 
 const mutateOrder = onCall(async request => {
@@ -56,12 +41,7 @@ const mutateOrder = onCall(async request => {
       const order = snap.data();
       if (order.restaurantId !== restaurantId) throw new HttpsError('permission-denied', 'Tenant mismatch.');
       if (order.status !== 'preparing' || order.isClaimed || order.driverId) throw new HttpsError('failed-precondition', 'Order is not available for driver claim.');
-      const role = request.auth.token.role;
-      if (role === 'Delivery') {
-        tx.update(ref, { status: 'driver_claimed', driverId: request.auth.uid, isClaimed: true, driverName: request.auth.token.name || request.auth.token.email || null, updatedAt: new Date() });
-      } else {
-        tx.update(ref, { status: 'driver_claimed', driverId: request.auth.uid, isClaimed: true, driverName: request.auth.token.name || request.auth.token.email || null, updatedAt: new Date() });
-      }
+      tx.update(ref, { status: 'driver_claimed', driverId: request.auth.uid, isClaimed: true, driverName: request.auth.token.name || request.auth.token.email || null, updatedAt: new Date() });
     });
     return { ok: true, operation, orderId: request.data.orderId };
   }
@@ -94,10 +74,9 @@ const mutateOrder = onCall(async request => {
       const appended = request.data?.items;
       if (!Array.isArray(appended) || appended.length === 0) throw new HttpsError('invalid-argument', 'items is required.');
       const combined = [...(Array.isArray(order.items) ? order.items : []), ...appended];
+      if (combined.length > 50 || combined.some(item => !item || !isNonEmptyString(item.menuItemId))) throw new HttpsError('invalid-argument', 'Every order item requires menuItemId and the order may contain at most 50 items.');
       const menuDataById = new Map();
-      const ids = new Set(combined.map(item => item?.menuItemId));
-      if ([...ids].some(id => !isNonEmptyString(id))) throw new HttpsError('invalid-argument', 'Every order item requires menuItemId.');
-      for (const id of ids) {
+      for (const id of new Set(combined.map(item => item.menuItemId))) {
         const menuSnap = await tx.get(db.doc(`restaurants/${restaurantId}/menuItems/${id}`));
         if (!menuSnap.exists) throw new HttpsError('not-found', `Menu item ${id} does not exist in this restaurant.`);
         menuDataById.set(id, { ...(menuSnap.data() || {}), __restaurantId: restaurantId });
