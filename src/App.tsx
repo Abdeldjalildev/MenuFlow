@@ -16,7 +16,6 @@ const CashierDashboard = lazy(() => import('./components/cashier/CashierDashboar
 const DeliveryDashboard = lazy(() => import('./components/delivery/DeliveryDashboard'));
 const SuperAdminDashboard = lazy(() => import('./components/Admin/SuperAdminDashboard').then(({ SuperAdminDashboard }) => ({ default: SuperAdminDashboard })));
 const WaiterExperience = lazy(() => import('./pages/waiter/WaiterExperience').then(({ WaiterExperience }) => ({ default: WaiterExperience })));
-
 const MerchantLayout = lazy(() => import('./components/merchant/MerchantLayout').then(({ MerchantLayout }) => ({ default: MerchantLayout })));
 const Overview = lazy(() => import('./components/merchant/pages/Overview').then(({ Overview }) => ({ default: Overview })));
 const Inventory = lazy(() => import('./components/merchant/pages/Inventory').then(({ Inventory }) => ({ default: Inventory })));
@@ -28,6 +27,7 @@ const Expenses = lazy(() => import('./components/merchant/pages/Expenses').then(
 const WasteLog = lazy(() => import('./components/merchant/pages/WasteLog').then(({ WasteLog }) => ({ default: WasteLog })));
 const Complaints = lazy(() => import('./components/merchant/pages/Complaints').then(({ Complaints }) => ({ default: Complaints })));
 const Reports = lazy(() => import('./components/merchant/pages/Reports').then(({ Reports }) => ({ default: Reports })));
+const Analytics = lazy(() => import('./components/merchant/pages/Analytics').then(({ Analytics }) => ({ default: Analytics })));
 const ControlPanel = lazy(() => import('./components/merchant/pages/ControlPanel').then(({ ControlPanel }) => ({ default: ControlPanel })));
 const Recipes = lazy(() => import('./components/merchant/pages/Recipes').then(({ Recipes }) => ({ default: Recipes })));
 const StockTake = lazy(() => import('./components/merchant/pages/StockTake').then(({ StockTake }) => ({ default: StockTake })));
@@ -67,10 +67,11 @@ function AppRoutes() {
       <Route path="/merchant/staff" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Staff /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/staff-performance" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><StaffPerformance /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/customers" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Customers /></MerchantLayout></ProtectedRoute>} />
-      <Route path="/merchant/expenses" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Expenses /></MerchantLayout></ProtectedRoute>} />
+      <Route path="/merchant/expenses" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><Expenses /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/waste" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><WasteLog /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/complaints" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Complaints /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/reports" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Reports /></MerchantLayout></ProtectedRoute>} />
+      <Route path="/merchant/analytics" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Analytics /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/recipes" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Recipes /></MerchantLayout></ProtectedRoute>} />
       <Route path="/control-panel" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><ControlPanel /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/stock-take" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><StockTake /></MerchantLayout></ProtectedRoute>} />
