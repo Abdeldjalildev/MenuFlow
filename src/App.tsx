@@ -28,6 +28,7 @@ const WasteLog = lazy(() => import('./components/merchant/pages/WasteLog').then(
 const Complaints = lazy(() => import('./components/merchant/pages/Complaints').then(({ Complaints }) => ({ default: Complaints })));
 const Reports = lazy(() => import('./components/merchant/pages/Reports').then(({ Reports }) => ({ default: Reports })));
 const Analytics = lazy(() => import('./components/merchant/pages/Analytics').then(({ Analytics }) => ({ default: Analytics })));
+const Commercial = lazy(() => import('./components/merchant/pages/Commercial').then(({ Commercial }) => ({ default: Commercial })));
 const ControlPanel = lazy(() => import('./components/merchant/pages/ControlPanel').then(({ ControlPanel }) => ({ default: ControlPanel })));
 const Recipes = lazy(() => import('./components/merchant/pages/Recipes').then(({ Recipes }) => ({ default: Recipes })));
 const StockTake = lazy(() => import('./components/merchant/pages/StockTake').then(({ StockTake }) => ({ default: StockTake })));
@@ -66,6 +67,7 @@ function AppRoutes() {
       <Route path="/merchant/complaints" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Complaints /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/reports" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Reports /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/analytics" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Analytics /></MerchantLayout></ProtectedRoute>} />
+      <Route path="/merchant/commercial" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Commercial /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/recipes" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Recipes /></MerchantLayout></ProtectedRoute>} />
       <Route path="/control-panel" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><ControlPanel /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/stock-take" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><StockTake /></MerchantLayout></ProtectedRoute>} />
