@@ -115,7 +115,7 @@ service cloud.firestore {
     }
     match /orders/{orderId} { allow read, write: if false; }
     match /reviews/{reviewId} { allow read, write: if false; }
-    match /complaints/{reviewId} { allow read, write: if false; }
+    match /complaints/{complaintId} { allow read, write: if false; }
     match /staff/{staffId} { allow read, write: if false; }
     match /customers/{customerId} { allow read, write: if false; }
     match /inventory/{inventoryId} { allow read, write: if false; }
