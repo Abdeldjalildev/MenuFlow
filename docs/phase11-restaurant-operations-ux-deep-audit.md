@@ -1,49 +1,93 @@
 # Phase 11 — Restaurant Operations & UX Deep Audit
 
-## Audit / implementation status
+## Final implementation status
 
-**AUTHORIZED — IN PROGRESS — GATES 11.1–11.4 IMPLEMENTED — VERIFICATION PENDING**
+**IMPLEMENTATION COMPLETE — VERIFICATION PENDING — PHASE 11 READY FOR FINAL TEST CONFIRMATION**
 
-Phase 11 is officially open. Gates 11.1–11.4 have now been implemented. Gate 11.5 remains the final operations closure gate and must not be started early.
+All five Phase 11 gates are implemented. Phase 11 is not being marked CLOSED because implementation evidence is not runtime verification.
 
-The governing Phase 11 scope is: Restaurant Operations & UX. It consumes the established Phase 8 security model, Phase 9 order authority/integrity model, and Phase 10 waiter workflow. It must not introduce a second order engine or payment gateway.
+## Gate-by-gate audit
 
-## Gate 11.3 — Menu Modifiers
+### 11.1 — Cart Persistence
 
-### Implementation result
+- Persistence is partitioned by restaurant/table/customer context.
+- Restoration waits for the relevant authenticated identity where applicable.
+- Persisted data contains identifiers, quantities, and bounded notes rather than authoritative price/total values.
+- Restaurant/table/customer changes invalidate or partition incompatible carts.
+- Storage failures fail safely.
+- **Verification:** pending local/runtime confirmation.
 
-- Canonical server-side modifier catalog supports identity, localized name, group, authoritative price delta, required/multiple selection semantics, and min/max selection bounds.
-- Modifier IDs are resolved only against the active restaurant's menu-item catalog.
-- Client-supplied modifier price values are not used for pricing.
-- Duplicate selections, invalid IDs, excessive selections, and missing required selections fail closed.
-- Authoritative modifier snapshots are persisted with order items.
-- Existing Phase 9 `buildAuthoritativeOrder` remains the only pricing authority.
+### 11.2 — Order UX & Feedback
 
-### Verification status
+- Explicit idle/submitting/success/validation/auth/network/server-rejection states exist.
+- Duplicate submission is prevented.
+- Cart is cleared only after confirmed server success.
+- Recoverable failures preserve the cart.
+- Canonical server order number is used for success feedback.
+- Accessibility and AR/EN/FR behavior are covered by implementation barriers.
+- **Verification:** pending local/browser confirmation.
 
-`tests/phase11-gate3-menu-modifiers.test.mjs` is the static contract barrier. Runtime/emulator verification is pending.
+### 11.3 — Menu Modifiers
 
-## Gate 11.4 — Notifications & Operational Alerts
+- Server-side canonical modifier identity and selection constraints exist.
+- Modifier identity and price are resolved from the restaurant menu catalog.
+- Client-supplied modifier pricing is not authoritative.
+- Duplicate, invalid, deleted/cross-tenant, missing-required, and excessive selections fail closed.
+- Authoritative modifier snapshots are persisted in order items.
+- Phase 9 `buildAuthoritativeOrder` remains the pricing authority.
+- **Verification:** pending local/runtime confirmation.
 
-### Implementation result
+### 11.4 — Notifications & Operational Alerts
 
-- Operational notification domain defines `new_order` and `order_transition` events.
-- Durable notifications are tenant-scoped under `restaurants/{restaurantId}/notifications`.
-- Trusted backend writer is duplicate-safe through deterministic event IDs.
-- Browser code is read-only for notifications; direct notification creation is denied by Firestore rules.
-- Tenant operators can read only their authorized restaurant's notifications.
-- Canonical `createOrder` emits a `new_order` alert after successful order persistence; replayed idempotent submissions do not duplicate the alert.
-- Notification failure is isolated from the canonical order result.
-- No push/SMS/email infrastructure was introduced.
+- `new_order` and `order_transition` are the supported operational event types.
+- Notifications are tenant-scoped and backend-written.
+- Browser notification access is read-only and tenant-scoped by rules.
+- Deterministic event IDs provide duplicate suppression.
+- Notification failure is isolated from order lifecycle correctness.
+- No external Push/SMS/email infrastructure was introduced.
+- **Deep-audit finding fixed:** the initial implementation defined `order_transition` but did not emit it. A backend Firestore `onDocumentUpdated` trigger now emits the event only when the order status actually changes, using a deterministic event ID.
+- **Verification:** pending emulator/runtime confirmation.
 
-### Verification status
+### 11.5 — Operations Closure
 
-`tests/phase11-gate4-notifications.test.mjs` is the static contract barrier. Runtime/emulator verification is pending.
+- Customer and waiter ordering converge on the same canonical server-side order creation path.
+- Existing `transitionOrder` remains the lifecycle authority.
+- Lifecycle status changes now have an operational-alert integration boundary without introducing a second state machine.
+- Tenant identity and authorization remain server/rules-side.
+- Static closure barrier and documentation are present.
+- **Verification:** pending.
 
-## Gate 11.5 — Operations Closure
+## Deep-audit classifications
 
-Still **PLANNED — NOT AUTHORIZED**. It remains the only Phase 11 closure gate.
+### Confirmed issue found and fixed
 
-## Acceptance philosophy
+**Missing lifecycle notification emission.** The notification domain supported `order_transition`, but the deployed workflow did not emit that event when an order status changed. This was fixed with a backend order-document update trigger and deterministic event IDs.
 
-Every Phase 11 gate must distinguish confirmed issue, risk, and recommendation. Existing behavior must be inspected before modification. A static test is evidence of a source contract, not runtime proof. A gate becomes verified only after its required runtime evidence is available; the phase becomes CLOSED only after Gate 11.5 and the full required regression evidence are complete.
+### Risks requiring runtime evidence
+
+- Firebase Functions trigger discovery/deployment behavior on the local Windows environment.
+- Trigger delivery timing and duplicate delivery behavior.
+- End-to-end customer/waiter → kitchen → lifecycle → downstream behavior.
+- Tenant isolation under real emulator identities/rules.
+- Accessibility/mobile behavior in an actual browser.
+- Modifier catalog behavior against real menu documents.
+- Cart restoration and context partitioning across real sessions/users.
+
+### Recommendations, not blockers
+
+- Broader browser E2E coverage can be strengthened after Phase 11 closure.
+- Notification retention/acknowledgement policy can be refined later if operational requirements demand it.
+- Modifier authoring UI and richer catalog-management workflows belong to a future authorized scope, not an unapproved Phase 11 expansion.
+
+## Scope integrity
+
+- No payment gateway.
+- No external notification provider.
+- No dependency upgrade.
+- No broad refactor.
+- No reopening of Phases 1–7 or the closed Firebase investigation.
+- No Gate 12 implementation was performed.
+
+## Final acceptance rule
+
+Phase 11 is **implementation-complete and awaiting only verification evidence**. It must remain unclosed until the five Phase 11 gate suites, full regression suite, and required browser/runtime evidence are confirmed.
