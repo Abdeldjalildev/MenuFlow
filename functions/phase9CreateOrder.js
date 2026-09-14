@@ -2,31 +2,34 @@ const legacyFunctions = require('./index');
 const { createOrder } = require('./canonicalOrderCreation');
 const { mutateOrder } = require('./secureOrderMutations');
 const { createOperationalNotification } = require('./operationalNotifications');
+const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { getFirestore } = require('firebase-admin/firestore');
 
 legacyFunctions.createOrder = createOrder;
 legacyFunctions.mutateOrder = mutateOrder;
 
-// Keep lifecycle authority in the established transitionOrder function while
-// adding the Phase 11 operational-alert boundary at the deployed export.
-const legacyTransitionOrder = legacyFunctions.transitionOrder;
-legacyFunctions.transitionOrder = require('firebase-functions/v2/https').onCall(async request => {
-  const result = await legacyTransitionOrder.run(request);
-  const role = request.auth?.token?.role;
-  const restaurantId = role === 'SuperAdmin'
-    ? request.data?.restaurantId
-    : (role === 'Admin' ? (request.data?.restaurantId || request.auth?.token?.restaurantId) : request.auth?.token?.restaurantId);
-  if (result?.ok && typeof restaurantId === 'string' && restaurantId.trim() && typeof request.data?.orderId === 'string' && request.data.orderId.trim() && typeof request.data?.newStatus === 'string' && request.data.newStatus.trim()) {
-    await createOperationalNotification(require('firebase-admin/firestore').getFirestore(), {
+// Operational lifecycle alerts observe the same order documents used by the
+// canonical lifecycle authority. This keeps transitionOrder authoritative and
+// isolates notification failure from the order mutation itself.
+legacyFunctions.orderTransitionOperationalAlert = onDocumentUpdated(
+  { document: 'restaurants/{restaurantId}/orders/{orderId}', region: 'us-central1' },
+  async event => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!before || !after || before.status === after.status) return null;
+    const restaurantId = event.params?.restaurantId;
+    const orderId = event.params?.orderId;
+    if (typeof restaurantId !== 'string' || !restaurantId.trim() || typeof orderId !== 'string' || !orderId.trim()) return null;
+    return createOperationalNotification(getFirestore(), {
       restaurantId,
       type: 'order_transition',
-      orderId: request.data.orderId,
-      status: request.data.newStatus,
+      orderId,
+      status: after.status,
       title: 'Order status updated',
-      message: `Order #${request.data.orderId} moved to ${request.data.newStatus}.`,
-      eventId: `order-transition-${request.data.orderId}-${request.data.newStatus}`,
+      message: `Order #${after.orderNumber ?? orderId} moved to ${after.status}.`,
+      eventId: `order-transition-${orderId}-${after.status}`,
     });
-  }
-  return result;
-});
+  },
+);
 
 module.exports = legacyFunctions;
