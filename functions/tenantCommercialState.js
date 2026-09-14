@@ -17,6 +17,13 @@ const assertTenantAccess = async (db, restaurantId, request) => {
 const assertRestaurantExists = async (db, restaurantId) => {
   const restaurant = await db.doc(`restaurants/${restaurantId}`).get();
   if (!restaurant.exists) throw new HttpsError('not-found', 'Restaurant does not exist.');
+  return restaurant.data() || {};
+};
+
+const assertRestaurantActive = async (db, restaurantId) => {
+  const restaurant = await assertRestaurantExists(db, restaurantId);
+  if (restaurant.lifecycleState !== 'active') throw new HttpsError('failed-precondition', 'Restaurant is not active.');
+  return restaurant;
 };
 
 const getCommercialState = onCall(async request => {
@@ -25,6 +32,7 @@ const getCommercialState = onCall(async request => {
   if (typeof restaurantId !== 'string' || !restaurantId.trim()) throw new HttpsError('invalid-argument', 'restaurantId is required.');
   const db = getFirestore();
   await assertTenantAccess(db, restaurantId, request);
+  await assertRestaurantActive(db, restaurantId);
   const snapshot = await db.doc(`restaurants/${restaurantId}/commercial/subscription`).get();
   if (!snapshot.exists) return { ok: true, planId: 'starter', subscriptionState: 'active', entitlements: buildEntitlementSnapshot({ planId: 'starter', state: 'active' }).entitlements };
   return { ok: true, ...buildEntitlementSnapshot(snapshot.data()) };
@@ -47,7 +55,7 @@ const requestCommercialChange = onCall(async request => {
   if (typeof restaurantId !== 'string' || !restaurantId.trim() || !getPlan(requestedPlanId)) throw new HttpsError('invalid-argument', 'Valid restaurantId and requestedPlanId are required.');
   const db = getFirestore();
   await assertTenantAccess(db, restaurantId, request);
-  await assertRestaurantExists(db, restaurantId);
+  await assertRestaurantActive(db, restaurantId);
   const requestRef = db.collection(`restaurants/${restaurantId}/commercial/changeRequests`).doc();
   await requestRef.create({ requestedPlanId, requestedBy: request.auth.uid, status: 'pending', createdAt: FieldValue.serverTimestamp() });
   return { ok: true, requestId: requestRef.id, status: 'pending' };
