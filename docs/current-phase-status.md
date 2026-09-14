@@ -58,59 +58,70 @@ All five Phase 11 gates are implemented and the full phase has been deep-audited
 
 ## Phase 13 — Production Readiness, Reliability & Scale
 
-**GATES 13.1–13.3 IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
+**IMPLEMENTATION COMPLETE — DEEP-AUDITED — AWAITING TEST/RUNTIME CONFIRMATION — NOT CLOSED**
 
-### Gate 13.1 — Production Data Integrity & Schema Closure
+All five gates are implemented and the full phase has been deep-audited. No Phase 13 gate is considered CLOSED until the required test/runtime/operator evidence is produced.
 
-**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
+### Gate status
 
-Implemented:
-- current production collection/ownership inventory;
-- canonical tenant namespace and schema invariants;
-- explicit legacy-path inventory;
-- reversible migration boundary with no destructive migration;
-- dedicated Gate 13.1 static contract test.
+- Gate 13.1 — Production Data Integrity & Schema Closure: **IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
+- Gate 13.2 — Observability, Error Taxonomy & Operational Diagnostics: **IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
+- Gate 13.3 — Performance & Scalability Hardening: **IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
+- Gate 13.4 — Resilience, Recovery & Operational Safety: **IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
+- Gate 13.5 — Production Readiness Closure: **IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
 
-Known legacy callers remain explicitly documented rather than blindly migrated: `QrCreations.tsx` references `settings/{id}` and `restaurant_qr_config/{id}`, while `WasteLog.tsx` references top-level `waste_log`.
+### Required verification order
 
-### Gate 13.2 — Observability, Error Taxonomy & Operational Diagnostics
+1. `npm run test:phase13:gate1`
+2. `npm run test:phase13:gate2`
+3. `npm run test:phase13:gate3`
+4. `npm run test:phase13:gate4`
+5. `npm run test:phase13:all`
+6. `npm test`
+7. runtime/emulator evidence for idempotency, notification failure isolation, security and critical journeys;
+8. measured performance/load evidence;
+9. production operator evidence for backup/restore and rollback.
 
-**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
+### Scope boundaries preserved
 
-Implemented:
-- bounded operational diagnostic module;
-- authorization/validation/dependency/timeout/data-integrity/not-found/internal taxonomy;
-- bounded diagnostic identifiers and messages;
-- explicit exclusion of request payloads, secrets, tokens and API keys;
-- structured logging boundary for operational notification failures;
-- preserved notification failure isolation;
-- dedicated static contract test and package script.
+- No destructive migration.
+- No payment gateway.
+- No speculative cache/queue infrastructure.
+- No dependency version upgrades.
+- No second order engine.
+- No false claim of automated backup/restore.
 
-No authorization or business error semantics were changed.
+## Phase 14 — SaaS Commercialization & Launch Foundations
 
-### Gate 13.3 — Performance & Scalability Hardening
+**PLANNED — DEEP-AUDITED — NOT AUTHORIZED FOR IMPLEMENTATION**
 
-**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
+Phase 14 is intentionally not implemented until Phase 13 verification/closure is complete.
 
-Implemented:
-- explicit Phase 6 frontend budget reuse: 850 KiB initial JS / 3 MiB total JS;
-- explicit analytics 5,000-order / 5,000-expense query bounds with fail-closed behavior;
-- tenant-scoped analytics query contract;
-- critical server-authority/transaction checks;
-- no speculative scaling dependency, cache or materialized-summary system;
-- dedicated static performance/scale contract test and package script.
+### Gate 14.1 — Production Environment & Deployment Contract
 
-Runtime/load evidence remains pending. Query-time analytics is intentionally retained until measured production-scale evidence justifies a different architecture.
+Production/test separation, environment inventory, reproducible build/deploy contract, secrets boundary, smoke tests and rollback procedure.
 
-### Gate 13.4
-**PLANNED — NOT AUTHORIZED**
+### Gate 14.2 — Restaurant Onboarding & Tenant Lifecycle
 
-### Gate 13.5
-**PLANNED — NOT AUTHORIZED**
+Canonical restaurant creation, initial Admin provisioning, safe defaults, lifecycle state, QR/settings initialization and reversible legacy-path reconciliation.
 
-### Gate dependency order
+### Gate 14.3 — Plans, Entitlements & Billing Boundary
 
-`13.1 → 13.2 → 13.3 → 13.4 → 13.5`
+Plan vocabulary, server-authoritative entitlements, subscription lifecycle, webhook idempotency, grace/cancellation/failure policy, then payment-provider evaluation.
+
+### Gate 14.4 — Commercial UX, Limits & Operational Self-Service
+
+Plan/status UI, server-derived usage/limits, upgrade/downgrade flows, account settings, commercial notices and AR/EN/FR/RTL coverage.
+
+### Gate 14.5 — SaaS Launch & Commercial Readiness Closure
+
+End-to-end onboarding, entitlement/billing verification, security regression, production smoke/rollback evidence, support documentation and final evidence-based launch decision.
+
+### Phase 14 dependency order
+
+`14.1 → 14.2 → 14.3 → 14.4 → 14.5`
+
+Full plan: `docs/phase14-saas-commercialization-deep-audit.md`
 
 ## Operating rule
 
