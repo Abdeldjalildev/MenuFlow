@@ -34,7 +34,7 @@ All five gates are implemented and deep-audited; runtime/operator verification r
 
 **ALL FIVE GATES IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING — NOT CLOSED**
 
-Gate 14.5 defines the final commercial-readiness closure contract. Phase 14 is implementation-complete and awaits only the required test/runtime/operator evidence; this status is intentionally not CLOSED until that evidence exists.
+Gate 14.5 defines the final commercial-readiness closure contract. Phase 14 is implementation-complete and awaits the required test/runtime/operator evidence; this status is intentionally not CLOSED until that evidence exists.
 
 ### Gate 14.1 — Production Environment & Deployment Contract
 
@@ -54,15 +54,15 @@ Verification: `npm run test:phase14:gate2`
 
 ### Gate 14.3 — Plans, Entitlements & Billing Boundary
 
-**IMPLEMENTED — VERIFICATION PENDING**
+**IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
 
-Server-authoritative `starter`/`growth` plan vocabulary, subscription lifecycle states, entitlement derivation, tenant-scoped commercial state, SuperAdmin-only state mutation and tenant-scoped plan-change requests are implemented. No payment provider was selected or integrated.
+Server-authoritative `starter`/`growth` plan vocabulary, subscription lifecycle states, entitlement derivation, tenant-scoped commercial state, SuperAdmin-only state mutation and tenant-scoped plan-change requests are implemented. Final audit added a server-side restaurant-existence check before authoritative commercial writes. No payment provider was selected or integrated.
 
 Verification: `npm run test:phase14:gate3`
 
 ### Gate 14.4 — Commercial UX, Limits & Operational Self-Service
 
-**IMPLEMENTED — VERIFICATION PENDING**
+**IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
 
 Protected merchant commercial UI, server-derived plan/subscription/entitlement display, tenant-scoped plan-change requests and non-authoritative upgrade/downgrade entry points are implemented. Usage counters remain deferred until authoritative policies are defined.
 
@@ -70,9 +70,9 @@ Verification: `npm run test:phase14:gate4`
 
 ### Gate 14.5 — SaaS Launch & Commercial Readiness Closure
 
-**IMPLEMENTED — VERIFICATION PENDING**
+**IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
 
-Closure contract, regression boundaries, required runtime/operator evidence and accepted launch limitations are documented. No production launch is claimed.
+Final closure contract and strengthened Gate 14.5 audit coverage are implemented. No production launch is claimed.
 
 Verification: `npm run test:phase14:gate5`
 
