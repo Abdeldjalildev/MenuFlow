@@ -45,5 +45,5 @@ test('Gate 13.4: recovery boundaries are documented without claiming unavailable
   assert.match(docs, /backup\/restore configuration must be owned by the deployment\/operator environment/i);
   assert.match(docs, /redeploying a previously verified Git commit/i);
   assert.match(docs, /data migrations must remain reversible/i);
-  assert.match(docs, /No automated backup\/restore system/i);
+  assert.match(docs, /does not claim an automated backup\/restore system/i);
 });
