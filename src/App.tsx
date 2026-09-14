@@ -40,14 +40,8 @@ function AppRoutes() {
   const [lang, setLang] = useState<'en' | 'ar' | 'fr'>('en');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, () => setLoading(false));
-    return () => unsubscribe();
-  }, []);
-
+  useEffect(() => { const unsubscribe = onAuthStateChanged(auth, () => setLoading(false)); return () => unsubscribe(); }, []);
   if (loading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
-
   return <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
     <Routes>
       <Route path="/" element={<TableEntry onStart={() => navigate('/menu' + window.location.search)} lang={lang} setLang={setLang} />} />
@@ -67,7 +61,7 @@ function AppRoutes() {
       <Route path="/merchant/staff" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Staff /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/staff-performance" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><StaffPerformance /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/customers" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Customers /></MerchantLayout></ProtectedRoute>} />
-      <Route path="/merchant/expenses" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><Expenses /></MerchantLayout></ProtectedRoute>} />
+      <Route path="/merchant/expenses" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Expenses /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/waste" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><WasteLog /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/complaints" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Complaints /></MerchantLayout></ProtectedRoute>} />
       <Route path="/merchant/reports" element={<ProtectedRoute allowedRoles={['Admin', 'SuperAdmin']}><MerchantLayout><Reports /></MerchantLayout></ProtectedRoute>} />
@@ -80,9 +74,5 @@ function AppRoutes() {
     </Routes>
   </Suspense>;
 }
-
-function App() {
-  return <Router><MenuProvider><OrderProvider><CartProvider><div className="min-h-screen bg-gray-50"><AppRoutes /></div></CartProvider></OrderProvider></MenuProvider></Router>;
-}
-
+function App() { return <Router><MenuProvider><OrderProvider><CartProvider><div className="min-h-screen bg-gray-50"><AppRoutes /></div></CartProvider></OrderProvider></MenuProvider></Router>; }
 export default App;
