@@ -2,11 +2,13 @@ const legacyFunctions = require('./index');
 const { createOrder } = require('./canonicalOrderCreation');
 const { mutateOrder } = require('./secureOrderMutations');
 const { createOperationalNotification } = require('./operationalNotifications');
+const { getAnalyticsSummary } = require('./phase12Analytics');
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { getFirestore } = require('firebase-admin/firestore');
 
 legacyFunctions.createOrder = createOrder;
 legacyFunctions.mutateOrder = mutateOrder;
+legacyFunctions.getAnalyticsSummary = getAnalyticsSummary;
 
 // Operational lifecycle alerts observe the same order documents used by the
 // canonical lifecycle authority. This keeps transitionOrder authoritative and
