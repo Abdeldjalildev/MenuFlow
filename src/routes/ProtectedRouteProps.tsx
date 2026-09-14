@@ -5,73 +5,36 @@ import { auth } from '../firebase';
 import type { StaffRole } from '../types/firestore';
 import { getAuthzClaims } from '../services/authClaims';
 
-interface ProtectedRouteProps {
-  children: React.ReactNode;
-  allowedRoles?: StaffRole[];
-}
+interface ProtectedRouteProps { children: React.ReactNode; allowedRoles?: StaffRole[]; }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const [authState, setAuthState] = useState<{
-    ready: boolean;
-    authenticated: boolean;
-    role: StaffRole | null;
-  }>({ ready: false, authenticated: false, role: null });
+  const [authState, setAuthState] = useState<{ ready: boolean; authenticated: boolean; role: StaffRole | null }>({ ready: false, authenticated: false, role: null });
   const location = useLocation();
 
   useEffect(() => {
     let active = true;
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        if (active) {
-          setAuthState({ ready: true, authenticated: false, role: null });
-        }
-        return;
-      }
-
+    const unsubscribe = onAuthStateChanged(auth, async user => {
+      if (!user) { if (active) setAuthState({ ready: true, authenticated: false, role: null }); return; }
       try {
         const claims = await getAuthzClaims(user);
-
-        if (active) {
-          setAuthState({
-            ready: true,
-            authenticated: true,
-            role: claims?.role ?? null,
-          });
-        }
+        if (active) setAuthState({ ready: true, authenticated: true, role: claims?.role ?? null });
       } catch (error) {
         console.error('Failed to read the authenticated user claims:', error);
-        if (active) {
-          setAuthState({ ready: true, authenticated: true, role: null });
-        }
+        if (active) setAuthState({ ready: true, authenticated: true, role: null });
       }
     });
-
-    return () => {
-      active = false;
-      unsubscribe();
-    };
+    return () => { active = false; unsubscribe(); };
   }, []);
 
-  if (!authState.ready) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
-      </div>
-    );
-  }
-
-  if (!authState.authenticated || !authState.role) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
+  if (!authState.ready) return <div className="flex h-screen items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" /></div>;
+  if (!authState.authenticated || !authState.role) return <Navigate to="/login" state={{ from: location }} replace />;
   if (allowedRoles && !allowedRoles.includes(authState.role)) {
     if (authState.role === 'SuperAdmin') return <Navigate to="/super-admin" replace />;
     if (authState.role === 'Admin') return <Navigate to="/merchant/overview" replace />;
     if (authState.role === 'Cashier') return <Navigate to="/cashier" replace />;
     if (authState.role === 'Kitchen') return <Navigate to="/kitchen" replace />;
-    return <Navigate to="/delivery" replace />;
+    if (authState.role === 'Waiter') return <Navigate to="/waiter" replace />;
+    if (authState.role === 'Delivery') return <Navigate to="/delivery" replace />;
   }
-
   return <>{children}</>;
 };
