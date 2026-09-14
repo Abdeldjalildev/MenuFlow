@@ -10,7 +10,7 @@ async function assertCreationActor(request, restaurantId, orderSource) {
   if (!auth) throw new HttpsError('unauthenticated', 'Authentication is required.');
   if (orderSource === 'customer') {
     if (auth.token?.firebase?.sign_in_provider !== 'anonymous') throw new HttpsError('unauthenticated', 'Anonymous customer authentication is required.');
-    return { customerId: auth.uid };
+    return { customerId: auth.uid, actorUid: auth.uid };
   }
   if (orderSource !== 'waiter') throw new HttpsError('invalid-argument', 'orderSource must be customer or waiter.');
   const role = auth.token?.role;
@@ -20,7 +20,7 @@ async function assertCreationActor(request, restaurantId, orderSource) {
     const membership = await getFirestore().doc(`restaurants/${restaurantId}/admins/${auth.uid}`).get();
     if (!membership.exists || membership.data()?.adminUid !== auth.uid) throw new HttpsError('permission-denied', 'Admin has no membership in this restaurant.');
   }
-  return { waiterId: auth.uid, waiterName: auth.token?.name || auth.token?.email || undefined };
+  return { waiterId: auth.uid, waiterName: auth.token?.name || auth.token?.email || undefined, actorUid: auth.uid };
 }
 
 function normalizeDeliveryData(deliveryData) {
@@ -73,6 +73,7 @@ const createOrder = onCall(async request => {
       const receiptSnap = await tx.get(receiptRef);
       if (receiptSnap.exists) {
         const receipt = receiptSnap.data() || {};
+        if (receipt.actorUid !== actor.actorUid || receipt.orderSource !== orderSource) throw new HttpsError('failed-precondition', 'Mutation ID has already been used by another actor.');
         result = { orderId: receipt.orderId, orderNumber: receipt.orderNumber, orderNumberDate: receipt.orderNumberDate, subtotal: receipt.subtotal, discountAmount: receipt.discountAmount, totalAmount: receipt.totalAmount };
         return;
       }
@@ -97,7 +98,7 @@ const createOrder = onCall(async request => {
       createdAt: new Date(), driverName: null, driverId: null, isClaimed: false, orderNumber, orderNumberDate,
     };
     tx.create(orderRef, order);
-    if (receiptRef) tx.create(receiptRef, { orderId: orderRef.id, orderNumber, orderNumberDate, subtotal: authoritative.subtotal, discountAmount: authoritative.discountAmount, totalAmount: authoritative.totalAmount, createdAt: new Date() });
+    if (receiptRef) tx.create(receiptRef, { orderId: orderRef.id, orderNumber, orderNumberDate, subtotal: authoritative.subtotal, discountAmount: authoritative.discountAmount, totalAmount: authoritative.totalAmount, actorUid: actor.actorUid, orderSource, createdAt: new Date() });
     result = { orderId: orderRef.id, orderNumber, order, subtotal: authoritative.subtotal, discountAmount: authoritative.discountAmount, totalAmount: authoritative.totalAmount };
   });
 
