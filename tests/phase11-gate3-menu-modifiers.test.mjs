@@ -16,6 +16,7 @@ test('Gate 11.3: canonical modifier schema and constraints exist server-side', (
   assert.match(pricing, /Duplicate menu modifiers are not allowed/);
   assert.match(pricing, /Required modifiers are missing/);
   assert.match(pricing, /Too many modifiers selected/);
+  assert.match(pricing, /modifier\.required === true/);
 });
 
 test('Gate 11.3: modifier identity and pricing come only from the tenant menu catalog', () => {
