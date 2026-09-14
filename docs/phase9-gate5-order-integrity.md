@@ -2,7 +2,7 @@
 
 ## Implementation status
 
-**IMPLEMENTATION COMPLETE — VERIFICATION PENDING**
+**IMPLEMENTATION COMPLETE — AWAITING LOCAL TEST VERIFICATION — NOT CLOSED**
 
 ## Closure contract
 
@@ -22,23 +22,8 @@ Gate 9.5 closes the remaining integrity gaps across the Phase 9 order domain:
 
 ## Verification matrix
 
-The Gate 5 contract test covers:
-
-1. customer/waiter canonical creation;
-2. server-authoritative pricing;
-3. fake restaurant and cross-tenant creation attempts;
-4. transactional order numbering;
-5. direct browser creation closure;
-6. backend-only mutation paths;
-7. transactional concurrency guards;
-8. duplicate append/idempotency protection;
-9. inventory/lifecycle invariants;
-10. forged driver identity protection;
-11. payment/state-machine invariants;
-12. unsupported mutation rejection.
-
-Runtime emulator verification is still required before Phase 9 can be marked **CLOSED**.
+The Gate 5 contract test covers 12 integrity/security assertions. Runtime emulator verification remains required before Phase 9 can be marked **CLOSED**.
 
 ## Scope boundary
 
-No payment gateway was added. No Phase 10 UI or waiter experience was implemented in this gate.
+No payment gateway was added. Gate 9.5 itself did not implement Phase 10; Phase 10 was opened separately after the Phase 9 implementation audit.
