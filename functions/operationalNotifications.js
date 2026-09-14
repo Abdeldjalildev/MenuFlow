@@ -1,4 +1,5 @@
 const { FieldValue } = require('firebase-admin/firestore');
+const { logDiagnostic } = require('./operationalDiagnostics');
 
 const NOTIFICATION_TYPES = new Set(['new_order', 'order_transition']);
 const MAX_TITLE_LENGTH = 160;
@@ -34,7 +35,7 @@ async function createOperationalNotification(db, { restaurantId, type, orderId, 
     });
     return ref.id;
   } catch (error) {
-    console.error('Operational notification creation failed', { restaurantId, type, orderId, error: error?.message });
+    logDiagnostic('warn', 'operational_notification', error, { restaurantId, orderId });
     return null;
   }
 }
