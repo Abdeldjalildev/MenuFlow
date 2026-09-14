@@ -56,9 +56,9 @@ test('Gate 12.2: restaurant-local date filtering is deterministic and browser ti
   assert.equal(result.salesByDay['2026-01-02'], 500);
 });
 
-test('Gate 12.2: query architecture is bounded and rejects malformed dates', () => {
+test('Gate 12.2: query architecture is bounded and timezone-safe at both edges', () => {
   const bounds = toQueryBounds('2026-01-01', '2026-01-07', 'Africa/Algiers');
-  assert.equal(bounds.startUtc.toISOString(), '2026-01-01T00:00:00.000Z');
-  assert.equal(bounds.endUtc.toISOString(), '2026-01-07T23:59:59.999Z');
+  assert.equal(bounds.startUtc.toISOString(), '2025-12-31T00:00:00.000Z');
+  assert.equal(bounds.endUtc.toISOString(), '2026-01-08T23:59:59.999Z');
   assert.throws(() => toQueryBounds('2026-01-08', '2026-01-07', 'Africa/Algiers'), /on or after/i);
 });
