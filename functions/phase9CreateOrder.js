@@ -4,6 +4,7 @@ const { mutateOrder } = require('./secureOrderMutations');
 const { createOperationalNotification } = require('./operationalNotifications');
 const { getAnalyticsSummary } = require('./phase12Analytics');
 const { createRestaurant } = require('./tenantOnboarding');
+const { getCommercialState, setCommercialState } = require('./tenantCommercialState');
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { getFirestore } = require('firebase-admin/firestore');
 
@@ -11,10 +12,9 @@ legacyFunctions.createOrder = createOrder;
 legacyFunctions.mutateOrder = mutateOrder;
 legacyFunctions.getAnalyticsSummary = getAnalyticsSummary;
 legacyFunctions.createRestaurant = createRestaurant;
+legacyFunctions.getCommercialState = getCommercialState;
+legacyFunctions.setCommercialState = setCommercialState;
 
-// Operational lifecycle alerts observe the same order documents used by the
-// canonical lifecycle authority. This keeps transitionOrder authoritative and
-// isolates notification failure from the order mutation itself.
 legacyFunctions.orderTransitionOperationalAlert = onDocumentUpdated(
   { document: 'restaurants/{restaurantId}/orders/{orderId}', region: 'us-central1' },
   async event => {
