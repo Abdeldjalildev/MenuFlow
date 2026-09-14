@@ -38,25 +38,6 @@ All five Phase 11 gates are implemented and the full phase has been deep-audited
 - Gate 12.4 — Advanced Filters: **IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
 - Gate 12.5 — Analytics Security & Accuracy Closure: **IMPLEMENTED — DEEP-AUDITED — VERIFICATION PENDING**
 
-### Gate 12.5 closure boundary
-
-- Analytics remains backend-only through `getAnalyticsSummary`.
-- Admin access requires explicit membership in the requested restaurant; SuperAdmin is platform-wide.
-- Browser analytics receives aggregated results rather than raw order/expense collections.
-- Analytics queries remain bounded to 5,000 records per source and fail closed on the limit.
-- Requested ranges remain bounded to 366 calendar days.
-- Revenue is recognized only from completed orders using persisted server-authoritative totals.
-- Historical item price/modifier/category snapshots are used for item/category analytics.
-- Restaurant-local timezone controls business-date and hour aggregation.
-- Net profit remains exactly revenue minus valid tenant expense records.
-- Expense UI and analytics now use the same tenant-scoped `restaurants/{restaurantId}/expenses` collection.
-- Expense writes are tenant-authorized and schema-validated in Firestore rules.
-- No payment/refund inference was introduced.
-
-### Deep-audit finding fixed
-
-The final Phase 12 audit found a real integration defect: the existing Expenses page wrote to a top-level `expenses` collection while analytics read `restaurants/{restaurantId}/expenses`. This could make entered expenses invisible to analytics and broke the intended tenant data contract. The expense UI was aligned with the tenant collection, signed claim-derived identity, explicit `expenseDate`, and a matching Firestore security/schema contract.
-
 ### Required verification order
 
 1. `npm run test:phase12:gate1`
@@ -77,29 +58,49 @@ The final Phase 12 audit found a real integration defect: the existing Expenses 
 
 ## Phase 13 — Production Readiness, Reliability & Scale
 
-**GATE 13.1 AUTHORIZED — IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
+**GATES 13.1–13.3 IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
 
 ### Gate 13.1 — Production Data Integrity & Schema Closure
+
+**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
 
 Implemented:
 - current production collection/ownership inventory;
 - canonical tenant namespace and schema invariants;
 - explicit legacy-path inventory;
 - reversible migration boundary with no destructive migration;
-- dedicated Gate 13.1 static contract test;
-- package script `npm run test:phase13:gate1`.
+- dedicated Gate 13.1 static contract test.
 
-Known current legacy callers are explicitly documented:
-- `QrCreations.tsx` references `settings/{id}` and `restaurant_qr_config/{id}`;
-- `WasteLog.tsx` references top-level `waste_log`.
+Known legacy callers remain explicitly documented rather than blindly migrated: `QrCreations.tsx` references `settings/{id}` and `restaurant_qr_config/{id}`, while `WasteLog.tsx` references top-level `waste_log`.
 
-These are not silently rewritten in Gate 13.1 because safe migration requires production inventory and ownership evidence first.
+### Gate 13.2 — Observability, Error Taxonomy & Operational Diagnostics
 
-### Gate 13.2
-**PLANNED — NOT AUTHORIZED**
+**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
 
-### Gate 13.3
-**PLANNED — NOT AUTHORIZED**
+Implemented:
+- bounded operational diagnostic module;
+- authorization/validation/dependency/timeout/data-integrity/not-found/internal taxonomy;
+- bounded diagnostic identifiers and messages;
+- explicit exclusion of request payloads, secrets, tokens and API keys;
+- structured logging boundary for operational notification failures;
+- preserved notification failure isolation;
+- dedicated static contract test and package script.
+
+No authorization or business error semantics were changed.
+
+### Gate 13.3 — Performance & Scalability Hardening
+
+**IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
+
+Implemented:
+- explicit Phase 6 frontend budget reuse: 850 KiB initial JS / 3 MiB total JS;
+- explicit analytics 5,000-order / 5,000-expense query bounds with fail-closed behavior;
+- tenant-scoped analytics query contract;
+- critical server-authority/transaction checks;
+- no speculative scaling dependency, cache or materialized-summary system;
+- dedicated static performance/scale contract test and package script.
+
+Runtime/load evidence remains pending. Query-time analytics is intentionally retained until measured production-scale evidence justifies a different architecture.
 
 ### Gate 13.4
 **PLANNED — NOT AUTHORIZED**
