@@ -4,6 +4,7 @@ const { getFirestore } = require('firebase-admin/firestore');
 const { buildAuthoritativeOrder, isNonEmptyString } = require('./orderPricing');
 
 const STAFF_ROLES = new Set(['SuperAdmin', 'Admin', 'Cashier', 'Kitchen', 'Delivery']);
+const MUTATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 async function authorizeRestaurantActor(request, restaurantId, allowedRoles) {
   const auth = request.auth;
@@ -17,6 +18,14 @@ async function authorizeRestaurantActor(request, restaurantId, allowedRoles) {
     return;
   }
   if (auth.token?.restaurantId !== restaurantId) throw new HttpsError('permission-denied', 'Cross-tenant order mutation is forbidden.');
+}
+
+function requireMutationId(request) {
+  const mutationId = request.data?.mutationId;
+  if (!isNonEmptyString(mutationId) || !MUTATION_ID_PATTERN.test(mutationId)) {
+    throw new HttpsError('invalid-argument', 'mutationId must be 1-128 characters using letters, numbers, underscore, or hyphen.');
+  }
+  return mutationId;
 }
 
 async function loadOrder(request, allowedRoles) {
@@ -64,13 +73,24 @@ const mutateOrder = onCall(async request => {
   }
 
   if (operation === 'item_append') {
+    const mutationId = requireMutationId(request);
     const { db, ref, restaurantId } = await loadOrder(request, new Set(['Admin', 'SuperAdmin']));
+    const receiptRef = db.doc(`restaurants/${restaurantId}/orders/${request.data.orderId}/mutationReceipts/${mutationId}`);
+    let duplicate = false;
     await db.runTransaction(async tx => {
+      const receiptSnap = await tx.get(receiptRef);
+      if (receiptSnap.exists) {
+        const receipt = receiptSnap.data();
+        if (receipt.operation !== 'item_append' || receipt.actorUid !== request.auth.uid) throw new HttpsError('failed-precondition', 'mutationId has already been used for another mutation.');
+        duplicate = true;
+        return;
+      }
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpsError('not-found', 'Order not found.');
       const order = snap.data();
       if (order.restaurantId !== restaurantId) throw new HttpsError('permission-denied', 'Tenant mismatch.');
       if (['completed', 'paid'].includes(order.status)) throw new HttpsError('failed-precondition', 'Completed or paid orders cannot be appended.');
+      if (order.inventoryDeducted === true) throw new HttpsError('failed-precondition', 'Orders with deducted inventory cannot be appended.');
       const appended = request.data?.items;
       if (!Array.isArray(appended) || appended.length === 0) throw new HttpsError('invalid-argument', 'items is required.');
       const combined = [...(Array.isArray(order.items) ? order.items : []), ...appended];
@@ -83,8 +103,9 @@ const mutateOrder = onCall(async request => {
       }
       const authoritative = buildAuthoritativeOrder(combined, menuDataById);
       tx.update(ref, { items: authoritative.items, subtotal: authoritative.subtotal, discountAmount: authoritative.discountAmount, totalAmount: authoritative.totalAmount, updatedAt: new Date() });
+      tx.create(receiptRef, { operation: 'item_append', mutationId, actorUid: request.auth.uid, createdAt: new Date() });
     });
-    return { ok: true, operation, orderId: request.data.orderId };
+    return { ok: true, operation, orderId: request.data.orderId, duplicate };
   }
 
   if (operation === 'payment_flag') {
