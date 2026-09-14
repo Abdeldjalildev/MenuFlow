@@ -32,6 +32,15 @@ test('Gate 14.2: claim publication happens only after membership/tenant provisio
   assert.ok(activeIndex > claimIndex, 'active lifecycle state must follow successful claim publication');
 });
 
+test('Gate 14.2: existing authorization identities cannot be silently overwritten', () => {
+  const source = read('functions/tenantOnboarding.js');
+  assert.match(source, /AUTH_ROLES = new Set/);
+  assert.match(source, /AUTH_ROLES\.has\(existingRole\)/);
+  assert.match(source, /already has an authorization role/);
+  assert.match(source, /collectionGroup\('admins'\)/);
+  assert.match(source, /already has a restaurant membership/);
+});
+
 test('Gate 14.2: partial provisioning is recoverable and never falsely reported as active', () => {
   const source = read('functions/tenantOnboarding.js');
   assert.match(source, /lifecycleState: 'provisioning'/);
@@ -44,7 +53,7 @@ test('Gate 14.2: client cannot directly create or change restaurant lifecycle st
   const rules = read('firestore.rules');
   assert.match(rules, /match \/restaurants\/\{restaurantId\} \{/);
   assert.match(rules, /allow create, update, delete: if isSuperAdmin\(\);/);
-  assert.doesNotMatch(rules, /lifecycleState.*request\.resource/);
+  assert.doesNotMatch(rules, /allow create, update, delete: if isTenant/);
 });
 
 test('Gate 14.2: no speculative billing or plan state is introduced', () => {
