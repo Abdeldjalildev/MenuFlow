@@ -74,23 +74,42 @@ The final Phase 12 audit found a real integration defect: the existing Expenses 
 - No materialized-summary system yet.
 - No dependency version upgrades.
 - No broad refactor.
-- Phase 13 remains planned and unauthorized.
 
 ## Phase 13 — Production Readiness, Reliability & Scale
 
-**PLANNED — DEEP-AUDITED — NOT AUTHORIZED**
+**GATE 13.1 AUTHORIZED — IMPLEMENTED — VERIFICATION PENDING — NOT CLOSED**
 
-Phase 13 did not have an existing authoritative gate specification in the repository. A proposed five-gate deep-audit roadmap has therefore been documented without implementing Phase 13 code.
+### Gate 13.1 — Production Data Integrity & Schema Closure
 
-1. **13.1 — Production Data Integrity & Schema Closure**: inventory authoritative collections/writers, schema contracts, legacy paths and safe migrations.
-2. **13.2 — Observability, Error Taxonomy & Operational Diagnostics**: safe structured diagnostics, error classification and secret/PII-safe logging.
-3. **13.3 — Performance & Scalability Hardening**: latency, Firestore query/index evidence, representative high-volume testing and frontend budgets.
-4. **13.4 — Resilience, Recovery & Operational Safety**: retry/idempotency boundaries, dependency-failure behavior, backup/restore responsibilities and recovery procedures.
-5. **13.5 — Production Readiness Closure**: controlled full-system security, runtime, performance, recovery and documentation audit with explicit accepted limitations.
+Implemented:
+- current production collection/ownership inventory;
+- canonical tenant namespace and schema invariants;
+- explicit legacy-path inventory;
+- reversible migration boundary with no destructive migration;
+- dedicated Gate 13.1 static contract test;
+- package script `npm run test:phase13:gate1`.
 
-Gate order is strict: `13.1 → 13.2 → 13.3 → 13.4 → 13.5`.
+Known current legacy callers are explicitly documented:
+- `QrCreations.tsx` references `settings/{id}` and `restaurant_qr_config/{id}`;
+- `WasteLog.tsx` references top-level `waste_log`.
 
-No Phase 13 gate should open before Phase 12 receives its required verification confirmation and explicit authorization.
+These are not silently rewritten in Gate 13.1 because safe migration requires production inventory and ownership evidence first.
+
+### Gate 13.2
+**PLANNED — NOT AUTHORIZED**
+
+### Gate 13.3
+**PLANNED — NOT AUTHORIZED**
+
+### Gate 13.4
+**PLANNED — NOT AUTHORIZED**
+
+### Gate 13.5
+**PLANNED — NOT AUTHORIZED**
+
+### Gate dependency order
+
+`13.1 → 13.2 → 13.3 → 13.4 → 13.5`
 
 ## Operating rule
 
