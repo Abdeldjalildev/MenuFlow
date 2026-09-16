@@ -101,7 +101,7 @@ export default function DeliveryDashboard() {
         )
       : 0;
     return Number(
-      order.totalPrice ?? order.totalAmount ?? calculatedTotalFromItems
+      order.totalAmount ?? calculatedTotalFromItems
     );
   };
 

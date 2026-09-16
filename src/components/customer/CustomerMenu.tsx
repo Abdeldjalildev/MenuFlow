@@ -91,8 +91,9 @@ export const CustomerMenu: React.FC = () => {
     }
   };
 
-  const handleFinalSubmit = async (deliveryInfo: { name: string; address: string; phone: string }) => {
-    if (!deliveryInfo.name.trim() || !deliveryInfo.address.trim() || !deliveryInfo.phone.trim()) {
+  const handleFinalSubmit = async (name: string, address: string, phone: string) => {
+    const deliveryInfo = { name, address, phone };
+    if (!name.trim() || !address.trim() || !phone.trim()) {
       setFeedback({ state: 'validation-error', message: t('orderDeliveryRequired') });
       return;
     }

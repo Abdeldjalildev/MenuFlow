@@ -18,6 +18,11 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Intentionally unused parameters are named with a leading underscore. Driver identity passed
+      // to claimOrderForDriver is deliberately ignored because it stays server-authoritative.
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
   },
   {
     files: ['src/context/**/*.{ts,tsx}'],

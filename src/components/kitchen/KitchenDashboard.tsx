@@ -55,7 +55,7 @@ export const KitchenDashboard: React.FC = () => {
     const status = o.status;
 
     // Exclude orders that are fully paid or completed so they disappear completely
-    const isFinished = status === 'paid' || status === 'completed' || status === 'TrackDone';
+    const isFinished = status === 'paid' || status === 'completed';
 
     return matchesRestaurant && !isFinished;
   });

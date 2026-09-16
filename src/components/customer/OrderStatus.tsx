@@ -30,8 +30,6 @@ export const OrderStatus: React.FC<OrderStatusProps> = ({ status, t, isRated }) 
     visualStatus = 'on_the_way';
   } else if (status === 'delivered_unpaid' || status === 'paid' || status === 'completed') {
     visualStatus = 'paid';
-  } else if (status === 'TrackDone') {
-    visualStatus = 'review';
   }
 
   const currentStageIndex = stages.findIndex((stage) => stage.id === visualStatus);

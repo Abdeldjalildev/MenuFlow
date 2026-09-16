@@ -47,8 +47,8 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = (props) => {
   const updateOrderStatus = context?.updateOrderStatus || (async () => {});
 
   // Exclude orders that are no longer under merchant control:
-  // paid, completed, delivered_unpaid, TrackDone, and on_the_way
-  const terminalStatuses: Order['status'][] = ['paid', 'completed', 'delivered_unpaid', 'TrackDone', 'on_the_way'];
+  // paid, completed (includes normalized legacy TrackDone), delivered_unpaid, and on_the_way
+  const terminalStatuses: Order['status'][] = ['paid', 'completed', 'delivered_unpaid', 'on_the_way'];
   const activeOrders = orders.filter((o: Order) => !terminalStatuses.includes(o.status));
 
   return (

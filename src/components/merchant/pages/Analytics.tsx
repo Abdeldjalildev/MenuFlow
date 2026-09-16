@@ -77,8 +77,17 @@ export const Analytics: React.FC<{ lang?: Language; setLang?: React.Dispatch<Rea
     return () => { cancelled = true; };
   }, []);
 
+  // The authorized restaurant list arrives asynchronously, so the tenant context has to be
+  // initialized from that state once it is available: selecting the first accessible restaurant is
+  // what scopes every analytics request below to a tenant. The selection logic itself is unchanged.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- asynchronous tenant-context initialization rather than a render-time derivation
   useEffect(() => { if (!restaurantId && restaurants[0]) setRestaurantId(restaurants[0].id); }, [restaurants, restaurantId]);
 
+  // `load` synchronizes server-authoritative analytics for the active tenant. Its synchronous
+  // loading/error transitions are the intended effect body, and `load` is deliberately not
+  // memoized/dependency-listed (it closes over the selected date range and labels), so the effect
+  // keeps the existing `restaurantId`-only dependency contract and still reloads on tenant change.
+  /* eslint-disable react-hooks/set-state-in-effect -- tenant-scoped analytics fetch lifecycle */
   const load = async () => {
     if (!restaurantId) { setError(t.noRestaurant); return; }
     setLoading(true); setError('');
@@ -97,6 +106,7 @@ export const Analytics: React.FC<{ lang?: Language; setLang?: React.Dispatch<Rea
   };
 
   useEffect(() => { if (restaurantId) void load(); }, [restaurantId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const trend = useMemo(() => {
     if (!data) return [] as Array<{ label: string; value: number }>;
@@ -149,8 +159,8 @@ export const Analytics: React.FC<{ lang?: Language; setLang?: React.Dispatch<Rea
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-4 font-bold text-slate-800">{t.trend}</h2><div className="h-72">{trend.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={trend}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="label" /><YAxis /><Tooltip formatter={(v: number | undefined) => money(v || 0, data.contract.currency)} /><Line type="monotone" dataKey="value" stroke="currentColor" strokeWidth={2} className="text-amber-500" dot={false} /></LineChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-slate-400">{t.empty}</div>}</div></div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-4 font-bold text-slate-800">{t.categories}</h2><div className="h-72">{categoryData.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={categoryData} layout="vertical"><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" /><YAxis type="category" dataKey="name" width={90} /><Tooltip formatter={(v: number | undefined) => money(v || 0, data.contract.currency)} /><Bar dataKey="value" fill="currentColor" className="text-amber-500" radius={[0, 6, 6, 0]} /></BarChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-slate-400">{t.empty}</div>}</div></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-4 font-bold text-slate-800">{t.trend}</h2><div className="h-72">{trend.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={trend}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="label" /><YAxis /><Tooltip formatter={v => money(Number(v || 0), data.contract.currency)} /><Line type="monotone" dataKey="value" stroke="currentColor" strokeWidth={2} className="text-amber-500" dot={false} /></LineChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-slate-400">{t.empty}</div>}</div></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-4 font-bold text-slate-800">{t.categories}</h2><div className="h-72">{categoryData.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={categoryData} layout="vertical"><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" /><YAxis type="category" dataKey="name" width={90} /><Tooltip formatter={v => money(Number(v || 0), data.contract.currency)} /><Bar dataKey="value" fill="currentColor" className="text-amber-500" radius={[0, 6, 6, 0]} /></BarChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-slate-400">{t.empty}</div>}</div></div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

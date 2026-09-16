@@ -101,6 +101,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Restore only after Firebase has established the current identity. This prevents
   // one authenticated customer's cart from being restored to another customer.
+  // The resets below intentionally stay synchronous with hydration: when the active
+  // restaurant/table/customer scope has no persisted cart (or no scope is active yet), any cart
+  // state left over from the previous scope must be dropped before it could reach another tenant.
+  /* eslint-disable react-hooks/set-state-in-effect -- synchronous cross-scope cart reset is required to prevent stale restaurant/table/customer cart state */
   useEffect(() => {
     if (!authReady || !activeKey) {
       hydratedKeyRef.current = null;
@@ -127,6 +131,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       else localStorage.setItem(activeKey, JSON.stringify(sanitized));
     } catch { /* storage remains non-authoritative */ }
   }, [activeKey, authReady, menuItems]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Persist only recoverable UX state: IDs, quantities, and notes. Prices/totals are
   // intentionally absent because the server is authoritative at order submission.

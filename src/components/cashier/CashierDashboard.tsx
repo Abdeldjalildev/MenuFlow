@@ -185,7 +185,7 @@ export default function CashierDashboard() {
                 : 0;
 
               const finalPrice =
-                order.totalPrice ?? order.totalAmount ?? calculatedTotal;
+                order.totalAmount ?? calculatedTotal;
 
               return (
                 <div
@@ -305,7 +305,7 @@ export default function CashierDashboard() {
               : 0;
 
             const finalPrice =
-              order.totalPrice ?? order.totalAmount ?? calculatedTotal;
+              order.totalAmount ?? calculatedTotal;
 
             const driverName = safeText(
               order.driverName,
