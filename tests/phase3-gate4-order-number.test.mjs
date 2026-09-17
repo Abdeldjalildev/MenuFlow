@@ -5,8 +5,9 @@ import { getNextOrderNumber, getOrderNumberDate } from '../functions/orderNumber
 
 const functionsSource = await readFile(new URL('../functions/index.js', import.meta.url), 'utf8');
 const providerSource = await readFile(new URL('../src/context/OrderProvider.tsx', import.meta.url), 'utf8');
+const secureMutationsSource = await readFile(new URL('../functions/secureOrderMutations.js', import.meta.url), 'utf8');
 
- test('Gate 4: a new UTC calendar day starts numbering at 1', () => {
+test('Gate 4: a new UTC calendar day starts numbering at 1', () => {
   const firstDate = getOrderNumberDate(new Date('2026-08-25T23:59:59.000Z'));
   const nextDate = getOrderNumberDate(new Date('2026-08-26T00:00:00.000Z'));
   assert.notEqual(firstDate, nextDate);
@@ -30,15 +31,18 @@ test('Gate 4: order creation is server-authoritative and transaction-backed', ()
   assert.match(functionsSource, /orderNumber, orderNumberDate/);
 });
 
-test('Gate 4: client no longer derives order numbers from the current order list', () => {
+test('Gate 4: client no longer derives order numbers and delegates creation to the server', () => {
   assert.doesNotMatch(providerSource, /orders\.filter\(o => toJsDate\(o\.createdAt\) >= today\)\.length \+ 1/);
-  assert.match(providerSource, /httpsCallable\(getFunctions\(\), 'createOrder'\)/);
+  assert.match(providerSource, /httpsCallable(?:<[^>]+>)?\(getFunctions\(\), 'createOrder'\)/);
 });
 
-test('Gate 4: mutable order operations use transactional or server-authoritative paths', () => {
-  const transactionCount = (providerSource.match(/runTransaction\(db/g) || []).length;
-  assert.ok(transactionCount >= 2, 'append and driver claim must remain transaction-backed');
-  assert.match(providerSource, /httpsCallable\(getFunctions\(\), 'transitionOrder'\)/);
+test('Gate 4: mutable order operations use server-authoritative transactional paths', () => {
+  assert.match(providerSource, /httpsCallable\(getFunctions\(\), 'mutateOrder'\)/);
+  assert.match(providerSource, /operation: 'item_append'/);
+  assert.match(providerSource, /operation: 'driver_claim'/);
+  assert.match(secureMutationsSource, /operation === 'item_append'/);
+  assert.match(secureMutationsSource, /operation === 'driver_claim'/);
+  assert.match(secureMutationsSource, /await db\.runTransaction\(async tx/);
   assert.match(functionsSource, /exports\.transitionOrder\s*=\s*onCall/);
-  assert.match(functionsSource, /await db\.runTransaction\(async tx/);
+  assert.match(providerSource, /httpsCallable\(getFunctions\(\), 'transitionOrder'\)/);
 });
