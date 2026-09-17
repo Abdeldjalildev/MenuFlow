@@ -84,9 +84,9 @@ test('Gate 3: anonymous customer can read public menu data and only their own or
   await assertFails(getDoc(tenantDoc(db, RESTAURANT_A, 'orders', 'order-b')));
 });
 
-test('Gate 3: anonymous customer can create a pending order only for their own Firebase UID', async () => {
+test('Gate 3: anonymous customers cannot create orders through direct Firestore writes', async () => {
   const db = anonymousCustomer();
-  await assertSucceeds(
+  await assertFails(
     setDoc(
       tenantDoc(db, RESTAURANT_A, 'orders', 'new-order'),
       validOrder(RESTAURANT_A, CUSTOMER_A),
@@ -100,17 +100,21 @@ test('Gate 3: anonymous customer can create a pending order only for their own F
   );
 });
 
-test('Gate 3: anonymous customer tenant selection is path-scoped, while staff access remains tenant-bound', async () => {
+test('Gate 3: anonymous customers cannot select a tenant for direct order creation, while staff access remains tenant-bound', async () => {
   const db = anonymousCustomer();
-  await assertSucceeds(
+  await assertFails(
     setDoc(
       tenantDoc(db, RESTAURANT_B, 'orders', 'cross-tenant-context'),
       validOrder(RESTAURANT_B, CUSTOMER_A),
     ),
   );
-  await assertSucceeds(getDoc(tenantDoc(db, RESTAURANT_B, 'orders', 'cross-tenant-context')));
 
   await seed(`restaurants/${RESTAURANT_B}/orders/staff-order`, validOrder(RESTAURANT_B, CUSTOMER_B));
+  await seed(`restaurants/${RESTAURANT_A}/admins/admin-a`, {
+    adminUid: 'admin-a',
+    createdAt: new Date(),
+    createdBy: 'superadmin',
+  });
   const staff = tenantUser('admin-a', RESTAURANT_A, 'Admin');
   await assertFails(getDoc(tenantDoc(staff, RESTAURANT_B, 'orders', 'staff-order')));
 });
@@ -195,6 +199,11 @@ test('Gate 3: malformed and oversized customer writes remain rejected', async ()
 
 test('Gate 3: appendToOrder current direct mutation is rejected by the security contract', async () => {
   await seed(`restaurants/${RESTAURANT_A}/orders/order-a`, validOrder(RESTAURANT_A, CUSTOMER_A));
+  await seed(`restaurants/${RESTAURANT_A}/admins/admin-a`, {
+    adminUid: 'admin-a',
+    createdAt: new Date(),
+    createdBy: 'superadmin',
+  });
   const db = tenantUser('admin-a', RESTAURANT_A, 'Admin');
   const order = await getDoc(tenantDoc(db, RESTAURANT_A, 'orders', 'order-a'));
   const data = order.data();
@@ -207,6 +216,11 @@ test('Gate 3: appendToOrder current direct mutation is rejected by the security 
 
 test('Gate 3: tenant staff cannot read or mutate another tenant order', async () => {
   await seed(`restaurants/${RESTAURANT_B}/orders/order-b`, validOrder(RESTAURANT_B, CUSTOMER_B));
+  await seed(`restaurants/${RESTAURANT_A}/admins/admin-a`, {
+    adminUid: 'admin-a',
+    createdAt: new Date(),
+    createdBy: 'superadmin',
+  });
   const db = tenantUser('admin-a', RESTAURANT_A, 'Admin');
   await assertFails(getDoc(tenantDoc(db, RESTAURANT_B, 'orders', 'order-b')));
   await assertFails(updateDoc(tenantDoc(db, RESTAURANT_B, 'orders', 'order-b'), {
