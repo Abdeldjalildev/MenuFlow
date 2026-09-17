@@ -63,6 +63,10 @@ beforeEach(async () => {
   await Promise.all(inventory.docs.map((item) => item.ref.delete()));
   const counters = await adminDb.collection('restaurants').doc(RESTAURANT_A).collection('orderNumberCounters').get();
   await Promise.all(counters.docs.map((item) => item.ref.delete()));
+
+  await seed(`restaurants/${RESTAURANT_A}`, { name: 'Phase 5 Gate 2 Restaurant', lifecycleState: 'active' });
+  await seed(`restaurants/${RESTAURANT_A}/menuItems/meal-a`, { restaurantId: RESTAURANT_A, name: 'Meal A', price: 1200, recipeId: 'recipe-a' });
+  await Promise.all(Array.from({ length: 5 }, (_, index) => seed(`restaurants/${RESTAURANT_A}/menuItems/meal-${index}`, { restaurantId: RESTAURANT_A, name: `Meal ${index}`, price: 100, recipeId: 'recipe-a' })));
 });
 
 after(async () => {
