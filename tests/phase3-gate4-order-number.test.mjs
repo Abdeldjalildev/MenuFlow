@@ -35,7 +35,7 @@ test('Gate 4: client no longer derives order numbers and delegates creation to t
   assert.doesNotMatch(providerSource, /orders\.filter\(o => toJsDate\(o\.createdAt\) >= today\)\.length \+ 1/);
   assert.match(
     providerSource,
-    /httpsCallable(?:<[^>]+>)?\s*\(\s*getFunctions\(\),\s*'createOrder'\s*\)/
+    /httpsCallable(?:<[\s\S]*?>)?\s*\(\s*getFunctions\(\),\s*'createOrder'\s*\)/
   );
 });
 
