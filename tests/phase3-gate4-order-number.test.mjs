@@ -33,7 +33,10 @@ test('Gate 4: order creation is server-authoritative and transaction-backed', ()
 
 test('Gate 4: client no longer derives order numbers and delegates creation to the server', () => {
   assert.doesNotMatch(providerSource, /orders\.filter\(o => toJsDate\(o\.createdAt\) >= today\)\.length \+ 1/);
-  assert.match(providerSource, /httpsCallable(?:<[^>]+>)?\(getFunctions\(\), 'createOrder'\)/);
+  assert.match(
+    providerSource,
+    /httpsCallable(?:<[^>]+>)?\s*\(\s*getFunctions\(\),\s*'createOrder'\s*\)/
+  );
 });
 
 test('Gate 4: mutable order operations use server-authoritative transactional paths', () => {
